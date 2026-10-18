@@ -925,6 +925,12 @@ ytmusic-miniplayer .ytMusicMiniPlayerProgressBar::-webkit-slider-runnable-track 
   border: 0 !important;
 }
 
+/* YT Music's own combined "0:30 / 5:00" readout (shown in wide windows)
+   duplicates the labels below. */
+ytmusic-miniplayer .ytMusicMiniPlayerTimeInfo {
+  display: none !important;
+}
+
 /* Elapsed / total time either side of the bar (drawn by spotify-style.js). */
 ytmusic-miniplayer .sp-time {
   position: absolute;

@@ -8,6 +8,16 @@ Not affiliated with Google or YouTube.
 | macOS    | working | Swift 6, AppKit + SwiftUI, WKWebView    | [`macos/`](macos/)     |
 | Windows  | planned | C#/.NET, WinUI 3, WebView2              | [`windows/`](windows/) |
 
+## Screenshots
+
+macOS, with the Spotify-style theme:
+
+![YT Music main window](docs/screenshots/app.png)
+
+Menu bar mini-player (Up Next tab):
+
+<img src="docs/screenshots/menu-bar.png" alt="YT Music menu bar mini-player" width="380">
+
 ## How it works
 
 YouTube Music has no public playback API, and its audio streams are signed per
