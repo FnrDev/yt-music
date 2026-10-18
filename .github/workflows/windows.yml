@@ -1,0 +1,46 @@
+name: Windows build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "windows/**"
+      - "shared/**"
+      - ".github/workflows/windows.yml"
+  pull_request:
+    paths:
+      - "windows/**"
+      - "shared/**"
+      - ".github/workflows/windows.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      # Self-contained single file: runs on Windows 10/11 without installing
+      # .NET. WebView2 (Evergreen) ships with Windows.
+      - name: Publish
+        run: >
+          dotnet publish windows/YTMusic/YTMusic.csproj
+          -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:EnableCompressionInSingleFile=true
+          -p:DebugType=none
+          -o publish
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: YTMusic-win-x64
+          path: publish/YTMusic.exe
+          if-no-files-found: error

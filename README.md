@@ -6,7 +6,7 @@ Not affiliated with Google or YouTube.
 | Platform | Status  | Stack                                   | Folder                 |
 |----------|---------|-----------------------------------------|------------------------|
 | macOS    | working | Swift 6, AppKit + SwiftUI, WKWebView    | [`macos/`](macos/)     |
-| Windows  | planned | C#/.NET, WinUI 3, WebView2              | [`windows/`](windows/) |
+| Windows  | early   | C#/.NET 10, WPF, WebView2               | [`windows/`](windows/) |
 
 ## Screenshots
 
@@ -134,6 +134,11 @@ macos/
     Settings/   preferences
 ```
 
-## Windows (planned)
+## Windows
 
-See [`windows/README.md`](windows/README.md).
+Early version: the YouTube Music window with the shared bridge and Spotify-style
+theme, a tray icon with playback controls, track-change notifications and
+media keys. Every push builds a self-contained `YTMusic.exe` on GitHub Actions
+(download it from the latest
+[Windows build](https://github.com/FnrDev/yt-music/actions/workflows/windows.yml) run).
+See [`windows/README.md`](windows/README.md) for details and what's next.

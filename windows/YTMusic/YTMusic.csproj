@@ -1,0 +1,46 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <!-- Lets the project restore and compile on macOS/Linux for quick checks;
+         the app itself only runs on Windows. -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <!-- Only for the notification-area (tray) icon. -->
+    <UseWindowsForms>true</UseWindowsForms>
+    <RootNamespace>YTMusic</RootNamespace>
+    <AssemblyName>YTMusic</AssemblyName>
+    <Product>YT Music</Product>
+    <Description>Unofficial desktop app for YouTube Music. Not affiliated with Google or YouTube.</Description>
+    <Version>0.1.0</Version>
+    <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <!-- WPF and WinForms both define Application, MessageBox, … Keep WPF's as the
+       defaults and spell out the few WinForms types the tray uses. -->
+  <ItemGroup>
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
+  </ItemGroup>
+
+  <!-- Page-side code shared with the macOS app (see shared/PROTOCOL.md). -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\shared\bridge\ytm-bridge.js" LogicalName="ytm-bridge.js" />
+    <EmbeddedResource Include="..\..\shared\themes\spotify-style.css" LogicalName="themes.spotify-style.css" />
+    <EmbeddedResource Include="..\..\shared\themes\spotify-style.js" LogicalName="themes.spotify-style.js" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\AppIcon.ico" />
+  </ItemGroup>
+
+</Project>

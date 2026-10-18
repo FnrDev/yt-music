@@ -1,0 +1,22 @@
+﻿<Window x:Class="YTMusic.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        Title="YT Music"
+        Width="1280" Height="820"
+        MinWidth="820" MinHeight="560"
+        Background="Black"
+        Icon="Assets/AppIcon.ico">
+    <Grid>
+        <wv2:WebView2 x:Name="WebView" />
+        <TextBlock x:Name="LoadError"
+                   Visibility="Collapsed"
+                   Foreground="#B3B3B3"
+                   FontSize="14"
+                   TextAlignment="Center"
+                   TextWrapping="Wrap"
+                   Margin="48"
+                   HorizontalAlignment="Center"
+                   VerticalAlignment="Center" />
+    </Grid>
+</Window>
