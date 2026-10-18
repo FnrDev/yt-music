@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppSettings.registerDefaults()
 
+        artworkLoader.bind(to: model)
         bridge = WebBridge(model: model)
         windowController = MainWindowController(bridge: bridge)
         actions = PlayerMenuActions(model: model, windowController: windowController)

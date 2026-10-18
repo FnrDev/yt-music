@@ -56,6 +56,10 @@
 
   const upscaleArtwork = (url) => {
     if (!url) return null;
+    // Video thumbnails: hqdefault/sddefault have black letterbox bars baked in.
+    // hq720 is a clean 1280×720 frame (hosts fall back to mqdefault if missing).
+    const video = /^https?:\/\/i\d*\.ytimg\.com\/vi(?:_webp)?\/([^/]+)\//.exec(url);
+    if (video) return `https://i.ytimg.com/vi/${video[1]}/hq720.jpg`;
     // googleusercontent thumbnails encode their size in the URL; ask for a big one.
     return url.replace(/=w\d+-h\d+[^&?#]*/, '=w544-h544-l90-rj');
   };

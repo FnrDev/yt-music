@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 import Observation
 
 /// Single source of truth for playback state across the app: the window,
@@ -9,6 +9,8 @@ final class PlayerModel {
     private(set) var state = PlayerState()
     /// When `state` was last received, used to extrapolate position.
     private(set) var stateReceivedAt = Date()
+    /// Loaded artwork for the current track; kept current by `ArtworkLoader.bind(to:)`.
+    var artwork: NSImage?
 
     /// Executes a command in the page. Set by `WebBridge`.
     @ObservationIgnored var commandSink: ((PlayerCommand) -> Void)?

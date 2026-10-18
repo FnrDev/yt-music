@@ -10,6 +10,7 @@ final class StatusItemController: NSObject {
     private let actions: PlayerMenuActions
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let popover = NSPopover()
+    private var hosting: NSHostingController<MiniPlayerView>!
     private var defaultsObserver: NSObjectProtocol?
 
     private static let maxTitleLength = 32
@@ -20,8 +21,9 @@ final class StatusItemController: NSObject {
         super.init()
 
         popover.behavior = .transient
+        popover.appearance = NSAppearance(named: .darkAqua)
         popover.animates = true
-        popover.contentViewController = NSHostingController(rootView: MiniPlayerView(
+        hosting = NSHostingController(rootView: MiniPlayerView(
             model: model,
             onShowWindow: { [weak self] in
                 self?.popover.performClose(nil)
@@ -32,6 +34,10 @@ final class StatusItemController: NSObject {
                 actions.showSettings(nil)
             }
         ))
+        // Size the popover ourselves (see togglePopover) rather than letting it
+        // track SwiftUI's ideal size while open.
+        hosting.sizingOptions = []
+        popover.contentViewController = hosting
 
         if let button = statusItem.button {
             button.target = self
@@ -97,6 +103,10 @@ final class StatusItemController: NSObject {
         if popover.isShown {
             popover.performClose(nil)
         } else {
+            popover.contentSize = hosting.sizeThatFits(in: NSSize(
+                width: MiniPlayerView.width,
+                height: .greatestFiniteMagnitude
+            ))
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             popover.contentViewController?.view.window?.makeKey()
         }
