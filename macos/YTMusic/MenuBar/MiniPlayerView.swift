@@ -1,17 +1,37 @@
 import SwiftUI
 
-/// The popover shown from the menu bar icon: a compact player in the spirit of
-/// Control Center's Now Playing module.
+/// The popover shown from the menu bar icon: search on top, then a compact
+/// player in the spirit of Control Center's Now Playing module.
 struct MiniPlayerView: View {
     let model: PlayerModel
+    let search: SearchModel
     var onShowWindow: () -> Void
     var onShowSettings: () -> Void
 
-    static let width: CGFloat = 300
+    static let width: CGFloat = 340
     private static let padding: CGFloat = 14
 
     var body: some View {
         VStack(spacing: 0) {
+            SearchField(search: search) {
+                if let first = search.results.first { activate(first) }
+            }
+            .padding(.bottom, 12)
+
+            if search.isActive {
+                SearchResultsView(
+                    search: search,
+                    onActivate: activate,
+                    onShowAll: {
+                        search.showAllResults()
+                        onShowWindow()
+                    }
+                )
+                Divider()
+                    .overlay(Color.white.opacity(0.08))
+                    .padding(.vertical, 10)
+            }
+
             // Always lay out the full player so the popover keeps one height.
             // NSPopover grows upward when its content gets taller, which would
             // push it off the top of the screen.
@@ -33,6 +53,11 @@ struct MiniPlayerView: View {
         .environment(\.colorScheme, .dark)
         .focusEffectDisabled()
         .animation(.easeOut(duration: 0.25), value: model.state.trackKey)
+    }
+
+    private func activate(_ result: SearchResult) {
+        // Pages (artists, albums, playlists) open in the main window.
+        if search.activate(result) { onShowWindow() }
     }
 }
 
@@ -414,4 +439,156 @@ func formatTime(_ seconds: Double) -> String {
     return h > 0
         ? String(format: "%d:%02d:%02d", h, m, s)
         : String(format: "%d:%02d", m, s)
+}
+
+// MARK: - Search
+
+private struct SearchField: View {
+    @Bindable var search: SearchModel
+    var onSubmit: () -> Void
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.white.opacity(focused ? 0.9 : 0.55))
+            TextField("Search songs, artists, albums", text: $search.query)
+                .textFieldStyle(.plain)
+                .focused($focused)
+                .onSubmit(onSubmit)
+                .onExitCommand { search.clear() }
+            if !search.query.isEmpty {
+                Button { search.clear() } label: {
+                    Image(systemName: "xmark.circle.fill")
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.white.opacity(0.5))
+                .help("Clear")
+            }
+        }
+        .font(.system(size: 13))
+        .foregroundStyle(.white)
+        .padding(.horizontal, 12)
+        .frame(height: 36)
+        .background(Capsule().fill(.white.opacity(focused ? 0.14 : 0.08)))
+        .overlay(Capsule().strokeBorder(.white.opacity(focused ? 0.85 : 0), lineWidth: 1.5))
+        .animation(.easeOut(duration: 0.15), value: focused)
+    }
+}
+
+/// Results for the current query, in a fixed-height list so the popover only
+/// changes size when search starts or ends.
+private struct SearchResultsView: View {
+    static let height: CGFloat = 320
+
+    let search: SearchModel
+    var onActivate: (SearchResult) -> Void
+    var onShowAll: () -> Void
+
+    var body: some View {
+        Group {
+            if search.results.isEmpty {
+                VStack(spacing: 8) {
+                    if search.isSearching {
+                        ProgressView().controlSize(.small)
+                    } else if let message = search.message {
+                        Text(message)
+                            .font(.system(size: 12))
+                            .foregroundStyle(.white.opacity(0.55))
+                            .multilineTextAlignment(.center)
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 2) {
+                        ForEach(Array(search.results.enumerated()), id: \.element.id) { index, result in
+                            if index == 0 {
+                                SectionHeader(title: "Top result")
+                            } else if index == 1 {
+                                SectionHeader(title: "Results").padding(.top, 8)
+                            }
+                            SearchResultRow(result: result) { onActivate(result) }
+                        }
+                        Button(action: onShowAll) {
+                            Text("Show all results in YT Music")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.7))
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 10)
+                    }
+                }
+                .scrollIndicators(.never)
+                .opacity(search.isSearching ? 0.6 : 1) // refreshing for a newer query
+            }
+        }
+        .frame(height: Self.height)
+    }
+}
+
+private struct SectionHeader: View {
+    let title: String
+
+    var body: some View {
+        Text(title)
+            .font(.system(size: 13, weight: .bold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 8)
+            .padding(.bottom, 4)
+    }
+}
+
+private struct SearchResultRow: View {
+    let result: SearchResult
+    var action: () -> Void
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                thumbnail
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(result.title)
+                        .font(.system(size: 13))
+                        .foregroundStyle(.white)
+                    Text(result.subtitle)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.white.opacity(0.6))
+                }
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                Image(systemName: result.isPlayable ? "play.fill" : "chevron.right")
+                    .font(.system(size: result.isPlayable ? 11 : 12, weight: .semibold))
+                    .foregroundStyle(.white.opacity(isHovering ? 0.9 : 0.4))
+                    .help(result.isPlayable ? "Play" : "Open in YT Music")
+            }
+            .padding(.horizontal, 8)
+            .frame(height: 52)
+            .background(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(.white.opacity(isHovering ? 0.08 : 0))
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
+    }
+
+    private var thumbnail: some View {
+        AsyncImage(url: result.thumbnailURL) { phase in
+            if let image = phase.image {
+                image.resizable().aspectRatio(contentMode: .fill)
+            } else {
+                Rectangle().fill(.white.opacity(0.08))
+            }
+        }
+        .frame(width: 40, height: 40)
+        // Artists get round photos, everything else rounded squares.
+        .clipShape(result.kind == .artist
+            ? AnyShape(Circle())
+            : AnyShape(RoundedRectangle(cornerRadius: 4, style: .continuous)))
+    }
 }

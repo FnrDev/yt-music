@@ -1,0 +1,1080 @@
+/*
+ * Spotify-style theme for YouTube Music.
+ *
+ * Values (colours, spacing, radii, type and control sizes, panel geometry)
+ * were measured from the Spotify desktop client 1.3.0.277: its dark-theme
+ * design tokens and a capture of its window. The rules are our own; no
+ * Spotify code, fonts, icons or branding are used. Text uses the system UI
+ * font in place of Spotify's licensed typeface.
+ *
+ * YouTube Music scrolls the whole window, so the rounded panels are drawn as
+ * fixed backgrounds behind the content rather than as scroll containers.
+ * Moving scrolling into a panel would break the site's infinite scroll.
+ */
+
+html {
+  /* Surfaces */
+  --sp-canvas: #000;
+  --sp-panel: #121212;           /* background-base */
+  --sp-elevated: #1f1f1f;        /* background-elevated-base / highlight */
+  --sp-highlight: #2a2a2a;       /* background-elevated-highlight */
+  --sp-tinted: #ffffff1a;        /* background-tinted-base */
+  --sp-tinted-hover: #ffffff24;  /* background-tinted-highlight */
+  --sp-panel-top: var(--sp-elevated);
+  --sp-card-hover: var(--sp-elevated);
+  --sp-row-hover: var(--sp-tinted);
+
+  /* Text and accents */
+  --sp-text: #fff;
+  --sp-subdued: #b3b3b3;         /* text-subdued */
+  --sp-muted: #7c7c7c;           /* essential-subdued */
+  --sp-accent: #1ed760;          /* bright accent */
+  --sp-accent-hover: #3be477;
+  --sp-accent-press: #1abc54;
+  --sp-track: #4d4d4d;           /* progress/volume track */
+
+  /* Geometry (points) */
+  --sp-gap: 8px;                 /* window margin and gap between panels */
+  --sp-radius: 8px;              /* panels */
+  --sp-radius-card: 6px;         /* card artwork */
+  --sp-radius-art: 4px;          /* row artwork */
+  --sp-spacing: 16px;            /* content spacing */
+  --sp-control: 48px;            /* top bar controls */
+  --sp-control-small: 32px;      /* chips, play button */
+  --sp-sidebar-width: 288px;     /* 8pt window margin + 280pt library panel */
+
+  /* Type scale */
+  --sp-text-xs: 11px;
+  --sp-text-sm: 13px;
+  --sp-text-md: 14px;
+  --sp-text-base: 16px;
+  --sp-text-xl: 24px;
+  --sp-font: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI",
+    "Helvetica Neue", Helvetica, Arial, "Noto Naskh Arabic UI", sans-serif;
+
+  /* Re-point YouTube Music's own design tokens. */
+  --yt-sys-color-baseline--base-background: var(--sp-canvas);
+  --yt-sys-color-baseline--raised-background: var(--sp-panel);
+  --yt-sys-color-baseline--text-primary: var(--sp-text);
+  --yt-sys-color-baseline--text-secondary: var(--sp-subdued);
+  --ytmusic-general-background-a: var(--sp-panel);
+  --ytmusic-general-background-c: var(--sp-canvas);
+  --ytmusic-text-secondary: var(--sp-subdued);
+  --ytmusic-guide-hover: var(--sp-row-hover);
+  --ytmusic-menu-item-hover-background-color: var(--sp-row-hover);
+  --ytmusic-play-button-background-color: var(--sp-accent);
+  --ytmusic-play-button-active-background-color: var(--sp-accent-hover);
+  --ytmusic-play-button-icon-color: #000;
+  --paper-slider-container-color: var(--sp-track);
+  --paper-slider-secondary-color: var(--sp-track);
+  --paper-slider-active-color: var(--sp-text);
+  --paper-slider-knob-color: var(--sp-text);
+  --paper-slider-knob-start-color: var(--sp-text);
+  --paper-progress-active-color: var(--sp-text);
+  --paper-progress-container-color: var(--sp-track);
+  --ytmusic-playback-progress-color: var(--sp-text);
+  --yt-page-navigation-progress-color: var(--sp-accent);
+
+  scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+}
+
+/* Only <html> carries the black canvas (it paints to the viewport canvas).
+   Any other opaque background, <body>'s included, would be painted over the
+   panels, which sit at z-index -1 behind all content. */
+html {
+  background: var(--sp-canvas) !important;
+}
+
+body,
+ytmusic-app {
+  background: transparent !important;
+}
+
+/* Type: system UI font in place of Roboto, tighter like Spotify's. */
+ytmusic-app,
+ytmusic-app *,
+tp-yt-iron-dropdown,
+tp-yt-iron-dropdown *,
+ytmusic-popup-container * {
+  font-family: var(--sp-font) !important;
+}
+
+/* ---- Panels ------------------------------------------------------------- */
+
+/* Spotify's library panel is wider than YT Music's guide. The page lays out
+   from this variable, so the sidebar and content move together. Collapsed,
+   it becomes Spotify's 72pt rail (plus the 8pt window margin). */
+ytmusic-app-layout {
+  --ytmusic-guide-width: var(--sp-sidebar-width);
+}
+
+ytmusic-app[guide-collapsed] ytmusic-app-layout {
+  --sp-sidebar-width: 80px;
+}
+
+/* Collapsed rail: a rounded panel of icons, no labels. */
+ytmusic-app[guide-collapsed] #mini-guide-background {
+  width: var(--sp-sidebar-width) !important;
+  background: var(--sp-canvas) !important;
+  border: 0 !important;
+}
+
+ytmusic-app[guide-collapsed] #mini-guide {
+  width: 72px !important;
+  margin-left: var(--sp-gap);
+  box-sizing: border-box;
+}
+
+ytmusic-app[guide-collapsed] #mini-guide ytmusic-guide-renderer {
+  width: 72px !important;
+  height: calc(100vh - var(--ytmusic-nav-bar-height, 64px) - var(--ytmusic-player-bar-height, 0px) - var(--sp-gap)) !important;
+  padding-top: var(--sp-gap);
+  box-sizing: border-box;
+  border-radius: var(--sp-radius);
+  background: var(--sp-panel);
+  overflow: hidden auto;
+}
+
+#mini-guide ytmusic-guide-entry-renderer {
+  width: 56px !important;
+  margin: 0 auto 4px !important;
+  border-radius: var(--sp-radius-card);
+  color: var(--sp-subdued);
+}
+
+#mini-guide ytmusic-guide-entry-renderer tp-yt-paper-item {
+  height: 48px !important;
+  min-height: 48px !important;
+  padding: 0 !important;
+  justify-content: center;
+  background: transparent !important;
+}
+
+#mini-guide ytmusic-guide-entry-renderer:hover {
+  background: var(--sp-tinted) !important;
+  color: var(--sp-text);
+}
+
+#mini-guide ytmusic-guide-entry-renderer[active] {
+  background: var(--sp-tinted-hover) !important;
+  color: var(--sp-text);
+}
+
+#mini-guide ytmusic-guide-entry-renderer .guide-icon {
+  margin: 0 !important;
+}
+
+#mini-guide ytmusic-guide-entry-renderer .title-column,
+#mini-guide ytmusic-guide-entry-renderer .title,
+#mini-guide #divider {
+  display: none !important;
+}
+
+/* Main panel behind the page content. */
+ytmusic-app-layout::before {
+  content: "";
+  position: fixed;
+  z-index: -1;
+  top: var(--ytmusic-nav-bar-height, 64px);
+  left: calc(var(--ytmusic-guide-width, 240px) + var(--sp-gap));
+  right: var(--sp-gap);
+  bottom: calc(var(--ytmusic-player-bar-height, 0px) + var(--sp-gap));
+  border-radius: var(--sp-radius);
+  background: linear-gradient(180deg, var(--sp-panel-top) 0, var(--sp-panel) 332px);
+  pointer-events: none;
+}
+
+/* YT Music paints a page-length black gradient over everything; clear it so
+   the panel shows. Don't hide the element: the page measures it for layout,
+   and `display: none` collapses all content to zero height. */
+ytmusic-browse-response .background-gradient {
+  background: none !important;
+}
+
+/* Header art (home mood gradient, artist/album hero) sits inside the panel:
+   inset to its edges, rounded top corners, fading into the panel colour. */
+ytmusic-browse-response #background.immersive-background {
+  clip-path: inset(0 var(--sp-gap) 0 var(--sp-gap) round var(--sp-radius) var(--sp-radius) 0 0);
+  -webkit-mask-image: linear-gradient(to bottom, #000 35%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 35%, transparent 100%);
+}
+
+/* Sidebar becomes its own rounded panel. */
+#guide-wrapper.ytmusic-app,
+#mini-guide-background.ytmusic-app-layout {
+  background: var(--sp-canvas) !important;
+  border: 0 !important; /* panels are separated by the gap, not a divider */
+}
+
+#guide-content.ytmusic-app {
+  margin: 0 0 var(--sp-gap) var(--sp-gap);
+  height: calc(100% - var(--ytmusic-nav-bar-height, 64px) - var(--ytmusic-player-bar-height, 0px) - var(--sp-gap)) !important;
+  border-radius: var(--sp-radius);
+  background: var(--sp-panel);
+  overflow: hidden auto;
+}
+
+/* Library panel, laid out like Spotify's:
+     Your Library                         (+)
+     [Explore] [Library]
+     Liked Music
+     Auto playlist
+   The first guide section (Home / Explore / Library) becomes the pill row,
+   with Home dropped since the top bar has it; the second section's
+   "New playlist" button becomes the round "+" beside the heading. */
+#guide-content.ytmusic-app {
+  position: relative;
+}
+
+/* YT Music fixes the guide at its own width; fill the wider panel instead. */
+#guide-content ytmusic-guide-renderer,
+#guide-content ytmusic-guide-renderer #sections,
+#guide-content ytmusic-guide-renderer ytmusic-guide-section-renderer {
+  width: 100% !important;
+  box-sizing: border-box;
+}
+
+#guide-content ytmusic-guide-renderer #sections {
+  display: flex !important;
+  flex-direction: column;
+  padding-top: 56px; /* room for the heading row */
+}
+
+#guide-content ytmusic-guide-renderer #sections::before {
+  content: "Your Library";
+  position: absolute;
+  top: 0;
+  left: var(--sp-spacing);
+  height: 56px;
+  display: flex;
+  align-items: center;
+  font-size: var(--sp-text-base);
+  font-weight: 700;
+  color: var(--sp-text);
+}
+
+#guide-content ytmusic-guide-renderer #divider {
+  display: none !important;
+}
+
+/* Pill row. */
+#guide-content ytmusic-guide-section-renderer:first-of-type #items {
+  display: flex !important;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: var(--sp-gap);
+  height: auto !important;
+  padding: 0 var(--sp-spacing) var(--sp-gap) !important;
+  overflow: visible !important;
+}
+
+#guide-content ytmusic-guide-section-renderer:first-of-type ytmusic-guide-entry-renderer:first-of-type {
+  display: none !important; /* Home: in the top bar */
+}
+
+#guide-content ytmusic-guide-section-renderer:first-of-type ytmusic-guide-entry-renderer {
+  width: auto !important;
+  border-radius: 500px;
+  background: var(--sp-tinted) !important;
+  color: var(--sp-text);
+}
+
+#guide-content ytmusic-guide-section-renderer:first-of-type ytmusic-guide-entry-renderer:hover {
+  background: var(--sp-tinted-hover) !important;
+}
+
+#guide-content ytmusic-guide-section-renderer:first-of-type ytmusic-guide-entry-renderer[active] {
+  background: var(--sp-text) !important;
+  color: #000;
+}
+
+#guide-content ytmusic-guide-section-renderer:first-of-type ytmusic-guide-entry-renderer tp-yt-paper-item {
+  min-height: var(--sp-control-small) !important;
+  height: var(--sp-control-small) !important;
+  padding: 0 12px !important;
+  background: transparent !important;
+}
+
+#guide-content ytmusic-guide-section-renderer:first-of-type ytmusic-guide-entry-renderer .guide-icon {
+  display: none !important;
+}
+
+#guide-content ytmusic-guide-section-renderer:first-of-type ytmusic-guide-entry-renderer .title-column {
+  margin: 0 !important;
+}
+
+#guide-content ytmusic-guide-section-renderer:first-of-type ytmusic-guide-entry-renderer .title,
+#guide-content ytmusic-guide-section-renderer:first-of-type ytmusic-guide-entry-renderer .title-column * {
+  font-size: var(--sp-text-md) !important;
+  font-weight: 400 !important;
+  color: inherit !important;
+}
+
+/* "New playlist" → round "+" beside the heading. */
+#guide-content ytmusic-guide-section-renderer #buttons {
+  position: absolute !important;
+  top: 12px;
+  right: var(--sp-gap);
+  height: var(--sp-control-small) !important;
+  padding: 0 !important;
+}
+
+#guide-content ytmusic-guide-section-renderer #buttons button {
+  width: var(--sp-control-small) !important;
+  min-width: 0 !important;
+  height: var(--sp-control-small) !important;
+  padding: 0 !important;
+  border-radius: 50% !important;
+  background: transparent !important;
+  color: var(--sp-subdued) !important;
+  font-size: 0 !important; /* label hidden; the + icon stays */
+  justify-content: center;
+}
+
+#guide-content ytmusic-guide-section-renderer #buttons button:hover {
+  background: var(--sp-elevated) !important;
+  color: var(--sp-text) !important;
+}
+
+#guide-content ytmusic-guide-section-renderer #buttons button * {
+  margin: 0 !important;
+}
+
+/* Playlist rows: title over subdued subtitle. YT Music sends no artwork for
+   these entries, so rows are text-only (like Spotify's compact list). */
+#guide-content ytmusic-guide-section-renderer:not(:first-of-type) #items {
+  width: auto !important;
+  padding: 0 var(--sp-gap) !important;
+}
+
+/* Rows span the (wider) panel rather than YT Music's fixed guide width. */
+#guide-content ytmusic-guide-section-renderer:not(:first-of-type) ytmusic-guide-entry-renderer {
+  width: 100% !important;
+  border-radius: var(--sp-radius-card);
+}
+
+#guide-content ytmusic-guide-section-renderer:not(:first-of-type) ytmusic-guide-entry-renderer tp-yt-paper-item {
+  height: 56px !important;
+  min-height: 56px !important;
+  padding: 0 12px !important;
+  background: transparent !important;
+}
+
+#guide-content ytmusic-guide-section-renderer:not(:first-of-type) ytmusic-guide-entry-renderer:hover {
+  background: var(--sp-tinted) !important;
+}
+
+#guide-content ytmusic-guide-section-renderer:not(:first-of-type) ytmusic-guide-entry-renderer[active] {
+  background: var(--sp-tinted-hover) !important;
+}
+
+#guide-content ytmusic-guide-section-renderer:not(:first-of-type) ytmusic-guide-entry-renderer .title-column {
+  margin: 0 !important;
+  min-width: 0;
+}
+
+#guide-content ytmusic-guide-section-renderer:not(:first-of-type) ytmusic-guide-entry-renderer .title {
+  font-size: var(--sp-text-base) !important;
+  font-weight: 400 !important;
+  color: var(--sp-text) !important;
+}
+
+#guide-content ytmusic-guide-section-renderer:not(:first-of-type) ytmusic-guide-entry-renderer .subtitle,
+#guide-content ytmusic-guide-section-renderer:not(:first-of-type) ytmusic-guide-entry-renderer .subtitle * {
+  font-size: var(--sp-text-md) !important;
+  color: var(--sp-subdued) !important;
+}
+
+/* ---- Top bar ------------------------------------------------------------ */
+
+#nav-bar-background.ytmusic-app-layout,
+#nav-bar-divider.ytmusic-app-layout {
+  background: var(--sp-canvas) !important;
+  border: 0 !important;
+  opacity: 1 !important;
+}
+
+ytmusic-search-box .search-box {
+  height: var(--sp-control) !important;
+  box-sizing: border-box;
+  border-radius: 500px !important;
+  background: var(--sp-elevated) !important;
+  border: 1px solid transparent !important;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+ytmusic-search-box #input-box {
+  background: transparent !important;
+  border: 0 !important;
+}
+
+ytmusic-search-box input {
+  font-size: var(--sp-text-base) !important;
+}
+
+ytmusic-search-box input::placeholder {
+  color: var(--sp-subdued) !important;
+}
+
+ytmusic-search-box:hover .search-box {
+  background: var(--sp-highlight) !important;
+  border-color: var(--sp-tinted) !important;
+}
+
+ytmusic-search-box[opened] .search-box,
+ytmusic-search-box:focus-within .search-box {
+  background: var(--sp-highlight) !important;
+  border: 2px solid var(--sp-text) !important;
+}
+
+/* Centre group, as in Spotify: a round Home button beside the search pill.
+   YT Music's logo link already goes Home, so it becomes that button (logo
+   artwork hidden, our own house glyph drawn instead). Both are positioned
+   against the fixed nav bar so the pair is centred in the window. */
+ytmusic-nav-bar {
+  --sp-search-width: 474px;
+  --sp-centre-group: calc(var(--sp-control) + var(--sp-gap) + var(--sp-search-width));
+}
+
+ytmusic-nav-bar ytmusic-logo {
+  position: absolute !important;
+  top: var(--sp-gap);
+  left: calc(50% - var(--sp-centre-group) / 2);
+  width: var(--sp-control) !important;
+  height: var(--sp-control) !important;
+  margin: 0 !important;
+}
+
+ytmusic-nav-bar ytmusic-logo a {
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: 50%;
+  background: var(--sp-elevated);
+  transition: background-color 0.15s ease, transform 0.1s ease;
+}
+
+ytmusic-nav-bar ytmusic-logo a > * {
+  display: none !important;
+}
+
+ytmusic-nav-bar ytmusic-logo a::after {
+  content: "";
+  position: absolute;
+  inset: 12px;
+  background: var(--sp-subdued);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 3.2 3 10.4V21h6.5v-6h5v6H21V10.4L12 3.2Zm7 15.8h-2.5v-6h-9v6H5v-7.6l7-5.6 7 5.6V19Z'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 3.2 3 10.4V21h6.5v-6h5v6H21V10.4L12 3.2Zm7 15.8h-2.5v-6h-9v6H5v-7.6l7-5.6 7 5.6V19Z'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+ytmusic-nav-bar ytmusic-logo a:hover {
+  background: var(--sp-highlight);
+  transform: scale(1.04);
+}
+
+ytmusic-nav-bar ytmusic-logo a:hover::after {
+  background: var(--sp-text);
+}
+
+/* On Home the glyph is filled and white. */
+html:has(ytmusic-guide-section-renderer:first-of-type ytmusic-guide-entry-renderer:first-of-type[active]) ytmusic-nav-bar ytmusic-logo a::after {
+  background: var(--sp-text);
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 3.2 3 10.4V21h6.5v-6h5v6H21V10.4L12 3.2Z'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 3.2 3 10.4V21h6.5v-6h5v6H21V10.4L12 3.2Z'/%3E%3C/svg%3E");
+}
+
+ytmusic-nav-bar ytmusic-search-box {
+  position: absolute !important;
+  top: var(--sp-gap);
+  left: calc(50% - var(--sp-centre-group) / 2 + var(--sp-control) + var(--sp-gap));
+  width: var(--sp-search-width) !important;
+  max-width: calc(100vw - 2 * var(--sp-sidebar-width)) !important;
+  margin: 0 !important;
+}
+
+/* Avatar: 32pt photo in a 48pt elevated circle. */
+ytmusic-nav-bar ytmusic-settings-button {
+  width: var(--sp-control) !important;
+  height: var(--sp-control) !important;
+  margin-right: var(--sp-gap) !important;
+  border-radius: 50%;
+  background: var(--sp-elevated);
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.1s ease;
+}
+
+ytmusic-nav-bar ytmusic-settings-button:hover {
+  transform: scale(1.04);
+}
+
+/* YT Music wraps the photo in a 26pt grey, clipping icon button; make it a
+   transparent 32pt circle so the photo isn't cropped or ringed. */
+ytmusic-nav-bar ytmusic-settings-button yt-icon-button,
+ytmusic-nav-bar ytmusic-settings-button yt-icon-button button,
+ytmusic-nav-bar ytmusic-settings-button yt-icon-button yt-interaction {
+  width: var(--sp-control-small) !important;
+  height: var(--sp-control-small) !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border-radius: 50% !important;
+  background: transparent !important;
+}
+
+ytmusic-nav-bar ytmusic-settings-button img,
+ytmusic-nav-bar ytmusic-settings-button yt-img-shadow {
+  display: block;
+  width: var(--sp-control-small) !important;
+  height: var(--sp-control-small) !important;
+  border-radius: 50%;
+}
+
+ytmusic-nav-bar #right-content {
+  height: 100%;
+  align-items: center;
+}
+
+/* Hosts that put the window controls inside the top bar (macOS) set
+   --ytm-host-titlebar-left to the room they need. */
+ytmusic-nav-bar #left-content {
+  padding-left: var(--ytm-host-titlebar-left, 0px) !important;
+}
+
+/* Spotify has no menu button at top-left; keep YT Music's guide toggle but
+   quiet, so the sidebar can still be collapsed. */
+ytmusic-nav-bar #guide-button {
+  color: var(--sp-muted) !important;
+}
+
+ytmusic-nav-bar #guide-button:hover {
+  color: var(--sp-text) !important;
+}
+
+/* ---- Page content ------------------------------------------------------- */
+
+/* Section headings: bold and tight, like Spotify's shelves. */
+ytmusic-carousel-shelf-basic-header-renderer .title,
+ytmusic-shelf-renderer .title.ytmusic-shelf-renderer {
+  font-size: var(--sp-text-xl) !important;
+  line-height: 1.25 !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.01em;
+}
+
+.title.ytmusic-header-renderer {
+  font-weight: 700 !important;
+  letter-spacing: -0.02em;
+}
+
+ytmusic-carousel-shelf-basic-header-renderer .strapline {
+  font-size: var(--sp-text-md) !important;
+  color: var(--sp-subdued) !important;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* Filter chips: flat pills; the selected one inverts. */
+ytmusic-chip-cloud-chip-renderer .gradient-box {
+  border: 0 !important;
+  border-radius: 500px !important;
+  background: var(--sp-tinted) !important;
+  box-shadow: none !important;
+}
+
+ytmusic-chip-cloud-chip-renderer a {
+  height: var(--sp-control-small) !important;
+  padding: 0 12px !important;
+  font-size: var(--sp-text-md) !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+ytmusic-chip-cloud-chip-renderer:hover .gradient-box {
+  background: var(--sp-tinted-hover) !important;
+}
+
+ytmusic-chip-cloud-chip-renderer[chip-style="STYLE_PRIMARY"] .gradient-box,
+ytmusic-chip-cloud-chip-renderer[is-selected] .gradient-box {
+  background: var(--sp-text) !important;
+}
+
+ytmusic-chip-cloud-chip-renderer[chip-style="STYLE_PRIMARY"] a,
+ytmusic-chip-cloud-chip-renderer[is-selected] a {
+  color: #000 !important;
+}
+
+/* Cards: hover surface drawn with a spread shadow so the carousel's sizing
+   (and its scroll math) is untouched. */
+ytmusic-two-row-item-renderer {
+  border-radius: var(--sp-radius-card);
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+ytmusic-two-row-item-renderer:hover {
+  background: var(--sp-card-hover);
+  box-shadow: 0 0 0 10px var(--sp-card-hover);
+}
+
+ytmusic-two-row-item-renderer .image-wrapper,
+ytmusic-two-row-item-renderer ytmusic-thumbnail-renderer {
+  border-radius: var(--sp-radius-card);
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+/* Keep YT Music's title size: its two-line title box is sized for it, and a
+   larger font overlaps the subtitle. */
+ytmusic-two-row-item-renderer .title {
+  font-weight: 500 !important;
+}
+
+ytmusic-two-row-item-renderer .subtitle,
+ytmusic-two-row-item-renderer .third-title {
+  font-size: var(--sp-text-md) !important;
+  color: var(--sp-subdued) !important;
+}
+
+/* Round play buttons on cards: green with a black glyph. */
+ytmusic-play-button-renderer {
+  --ytmusic-play-button-background-color: var(--sp-accent);
+  --ytmusic-play-button-active-background-color: var(--sp-accent-press);
+  --ytmusic-play-button-icon-color: #000;
+  box-shadow: 0 8px 8px rgba(0, 0, 0, 0.3);
+}
+
+ytmusic-play-button-renderer:hover {
+  --ytmusic-play-button-background-color: var(--sp-accent-hover);
+}
+
+/* Track rows. */
+ytmusic-responsive-list-item-renderer {
+  border-radius: var(--sp-radius-art);
+  border-bottom-color: transparent !important;
+}
+
+ytmusic-responsive-list-item-renderer:hover {
+  background: var(--sp-row-hover) !important;
+}
+
+ytmusic-responsive-list-item-renderer .secondary-flex-columns,
+ytmusic-responsive-list-item-renderer .fixed-columns {
+  color: var(--sp-subdued) !important;
+}
+
+ytmusic-responsive-list-item-renderer ytmusic-thumbnail-renderer,
+ytmusic-responsive-list-item-renderer .thumbnail {
+  border-radius: var(--sp-radius-art);
+  overflow: hidden;
+}
+
+/* ---- Player bar --------------------------------------------------------- */
+/* Two variants: classic <ytmusic-player-bar> and newer <ytmusic-miniplayer>. */
+
+ytmusic-player-bar,
+ytmusic-miniplayer,
+#player-bar-background.ytmusic-app-layout {
+  background: var(--sp-canvas) !important;
+  border-top: 0 !important;
+}
+
+/* Cover the gap under the main panel so scrolling content can't show through. */
+ytmusic-player-bar,
+ytmusic-miniplayer {
+  box-shadow: 0 calc(-1 * var(--sp-gap)) 0 var(--sp-canvas) !important;
+}
+
+/* Newer player: white play disc, subdued secondary controls. */
+ytmusic-miniplayer .ytmusicPlayerControlsPlayPauseButton button {
+  width: var(--sp-control-small) !important;
+  height: var(--sp-control-small) !important;
+  min-width: 0 !important;
+  padding: 0 !important;
+  border-radius: 50% !important;
+  background: var(--sp-text) !important;
+  color: #000 !important;
+  transition: transform 0.1s ease;
+}
+
+ytmusic-miniplayer .ytmusicPlayerControlsPlayPauseButton button:hover {
+  transform: scale(1.06);
+}
+
+ytmusic-miniplayer .ytmusicPlayerControlsPlayPauseButton button * {
+  color: #000 !important;
+  fill: #000 !important;
+}
+
+ytmusic-miniplayer .ytmusicPlayerControlsControlButton:not(.ytmusicPlayerControlsPlayPauseButton) button,
+ytmusic-miniplayer .ytMusicMiniPlayerRightSection button {
+  color: var(--sp-subdued) !important;
+  background: transparent !important;
+}
+
+ytmusic-miniplayer .ytmusicPlayerControlsControlButton:not(.ytmusicPlayerControlsPlayPauseButton) button:hover,
+ytmusic-miniplayer .ytMusicMiniPlayerRightSection button:hover {
+  color: var(--sp-text) !important;
+}
+
+ytmusic-miniplayer button[aria-pressed="true"] {
+  color: var(--sp-accent) !important;
+}
+
+ytmusic-miniplayer .ytMusicMiniPlayerTimeInfo {
+  font-size: var(--sp-text-xs) !important;
+  color: var(--sp-subdued) !important;
+}
+
+ytmusic-miniplayer a {
+  font-size: var(--sp-text-sm) !important;
+  color: var(--sp-subdued) !important;
+}
+
+/* Range inputs (progress, volume): white, green on hover. */
+ytmusic-miniplayer input[type="range"] {
+  accent-color: var(--sp-text);
+}
+
+ytmusic-miniplayer input[type="range"]:hover {
+  accent-color: var(--sp-accent);
+}
+
+/* The centre play/pause control: white disc, black glyph. */
+ytmusic-player-bar #play-pause-button {
+  --yt-icon-color: #000;
+  color: #000 !important;
+  background: var(--sp-text) !important;
+  border-radius: 50% !important;
+  transform: scale(0.8);
+  transition: transform 0.1s ease;
+}
+
+ytmusic-player-bar #play-pause-button:hover {
+  transform: scale(0.84);
+}
+
+ytmusic-player-bar #play-pause-button yt-icon,
+ytmusic-player-bar #play-pause-button .icon {
+  color: #000 !important;
+  fill: #000 !important;
+}
+
+ytmusic-player-bar .left-controls-buttons tp-yt-paper-icon-button,
+ytmusic-player-bar .left-controls-buttons yt-icon-button,
+ytmusic-player-bar .right-controls-buttons tp-yt-paper-icon-button,
+ytmusic-player-bar .right-controls-buttons yt-icon-button {
+  color: var(--sp-subdued);
+}
+
+ytmusic-player-bar .left-controls-buttons tp-yt-paper-icon-button:hover,
+ytmusic-player-bar .right-controls-buttons tp-yt-paper-icon-button:hover {
+  color: var(--sp-text);
+}
+
+ytmusic-player-bar .title {
+  font-weight: 600 !important;
+}
+
+ytmusic-player-bar .byline,
+ytmusic-player-bar .time-info {
+  color: var(--sp-subdued) !important;
+}
+
+/* Progress and volume: thin white bars that turn green on hover. */
+ytmusic-player-bar #progress-bar,
+ytmusic-player-bar #volume-slider {
+  --paper-slider-height: 4px;
+}
+
+ytmusic-player-bar #progress-bar:hover,
+ytmusic-player-bar #volume-slider:hover,
+ytmusic-player-bar #progress-bar[dragging],
+ytmusic-player-bar #volume-slider[dragging] {
+  --paper-slider-active-color: var(--sp-accent);
+  --paper-progress-active-color: var(--sp-accent);
+}
+
+/* ---- Now-playing bar layout (newer player) ------------------------------ */
+/* Spotify's arrangement: track info left; transport controls centred with the
+   progress bar directly beneath them; volume as an inline horizontal slider. */
+
+ytmusic-miniplayer {
+  padding: 0 var(--sp-gap) !important;
+}
+
+/* Left: 56pt artwork, title over a smaller subdued artist line. */
+ytmusic-miniplayer .ytmusicTrackInfoThumbnailWrapper,
+ytmusic-miniplayer .ytmusicTrackInfoThumbnail {
+  width: 56px !important;
+  height: 56px !important;
+  border-radius: var(--sp-radius-art) !important;
+  object-fit: cover;
+}
+
+ytmusic-miniplayer .ytmusicTrackInfoThumbnailWrapper {
+  overflow: hidden;
+}
+
+ytmusic-miniplayer .ytmusicTrackInfoTitle,
+ytmusic-miniplayer .ytmusicTrackInfoTitle * {
+  font-size: var(--sp-text-md) !important;
+  font-weight: 400 !important;
+  color: var(--sp-text) !important;
+}
+
+ytmusic-miniplayer .ytmusicTrackInfoByline,
+ytmusic-miniplayer .ytmusicTrackInfoByline * {
+  font-size: var(--sp-text-xs) !important;
+  color: var(--sp-subdued) !important;
+}
+
+ytmusic-miniplayer .ytmusicTrackInfoTitle a:hover,
+ytmusic-miniplayer .ytmusicTrackInfoByline a:hover {
+  color: var(--sp-text) !important;
+  text-decoration: underline;
+}
+
+/* Centre: 32pt controls at the top of the bar... */
+ytmusic-miniplayer .ytMusicMiniPlayerMiddleSection {
+  align-self: start !important;
+  padding-top: 6px !important;
+  position: relative;
+  z-index: 1; /* above the progress row's hit area */
+}
+
+ytmusic-miniplayer .ytmusicPlayerControlsMainControls {
+  gap: var(--sp-gap) !important;
+}
+
+ytmusic-miniplayer .ytmusicPlayerControlsControlButton {
+  width: var(--sp-control-small) !important;
+  height: var(--sp-control-small) !important;
+  margin: 0 4px !important;
+}
+
+ytmusic-miniplayer .ytmusicPlayerControlsControlButton button {
+  width: var(--sp-control-small) !important;
+  height: var(--sp-control-small) !important;
+  min-width: 0 !important;
+  padding: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+/* 16pt glyphs, centred. Every box between the button and the <svg> is sized,
+   otherwise the glyph shrinks into the top-left corner of a 24pt wrapper. */
+ytmusic-miniplayer .ytmusicPlayerControlsControlButton .ytSpecButtonShapeNextIcon,
+ytmusic-miniplayer .ytmusicPlayerControlsControlButton .ytSpecButtonShapeNextIcon *:not(path) {
+  width: 16px !important;
+  height: 16px !important;
+  margin: 0 !important;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ...and the progress bar beneath them instead of along the top edge. */
+ytmusic-miniplayer .ytMusicMiniPlayerProgressBarWrapper {
+  top: auto !important;
+  bottom: 4px !important;
+  z-index: 0 !important;
+  background: transparent !important;
+  left: 50% !important;
+  right: auto !important;
+  width: min(calc(40% - 96px), 722px) !important; /* room for the time labels */
+  height: 12px !important;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+}
+
+/* Same as the volume slider: a 12pt input (so the knob centres) with the
+   page's own inline fill drawn as a 4pt stripe, inset 2pt at each end. The
+   page owns that background, so the rounded caps are dots drawn by the
+   wrapper: fill colour at the start, track colour at the end. */
+ytmusic-miniplayer .ytMusicMiniPlayerProgressBar {
+  width: 100% !important;
+  height: 12px !important;
+  margin: 0 !important;
+  background-size: calc(100% - 4px) 4px !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+}
+
+ytmusic-miniplayer .ytMusicMiniPlayerProgressBar::-webkit-slider-runnable-track {
+  height: 12px !important;
+  background: transparent !important;
+  border: 0 !important;
+}
+
+/* Elapsed / total time either side of the bar (drawn by spotify-style.js). */
+ytmusic-miniplayer .sp-time {
+  position: absolute;
+  top: 50%;
+  width: 40px;
+  transform: translateY(-50%);
+  font-size: var(--sp-text-xs);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--sp-subdued);
+  pointer-events: none;
+}
+
+ytmusic-miniplayer .sp-time-elapsed {
+  right: calc(100% + var(--sp-gap));
+  text-align: right;
+}
+
+ytmusic-miniplayer .sp-time-total {
+  left: calc(100% + var(--sp-gap));
+  text-align: left;
+}
+
+ytmusic-miniplayer .ytMusicMiniPlayerProgressBarWrapper::before,
+ytmusic-miniplayer .ytMusicMiniPlayerProgressBarWrapper::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  margin-top: -2px;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+ytmusic-miniplayer .ytMusicMiniPlayerProgressBarWrapper::before {
+  left: 0;
+  background: var(--sp-bar-fill);
+}
+
+ytmusic-miniplayer .ytMusicMiniPlayerProgressBarWrapper::after {
+  right: 0;
+  background: rgba(255, 255, 255, 0.2); /* the page's own track colour */
+}
+
+/* Right: volume as an always-visible horizontal slider. */
+ytmusic-miniplayer .ytMusicMiniPlayerVolumeWrapper {
+  width: auto !important;
+  gap: var(--sp-gap);
+  align-items: center;
+}
+
+ytmusic-miniplayer .ytMusicMiniPlayerVolumePopup {
+  display: block !important;
+  position: relative !important;
+  inset: auto !important; /* drop YT Music's floating-popup offsets */
+  margin: 0 !important;
+  width: 93px;
+  height: var(--sp-control-small);
+  padding: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+/* YT Music builds this slider vertical (min at the bottom) and its code
+   assumes that geometry. Re-orienting it with writing-mode makes drags run
+   backwards, so keep it exactly as built and rotate it a quarter turn
+   clockwise: the bottom (min) lands on the left, and hit-testing follows
+   the rotation, so dragging maps correctly. */
+ytmusic-miniplayer .ytMusicMiniPlayerVolumePopup slider-shape {
+  position: absolute !important;
+  top: 50%;
+  left: 50%;
+  width: 12px !important;
+  height: 93px !important;
+  margin: 0 !important;
+  transform: translate(-50%, -50%) rotate(90deg);
+  align-items: center;
+  justify-content: center;
+}
+
+/* Thin bars: white fill over a grey track, green while hovered; the knob only
+   appears on hover, as in Spotify. YT Music exposes the volume fill as
+   --yt-slider-shape-gradient-percent and draws the progress fill from its
+   brand colour tokens, which are re-pointed here. */
+ytmusic-miniplayer {
+  --sp-bar-fill: var(--sp-text);
+  --yt-sys-color-baseline--static-brand-red: var(--sp-bar-fill);
+  --yt-sys-color-baseline--static-magenta: var(--sp-bar-fill);
+}
+
+/* Still vertical here (rotated above), filled from the bottom. The input is
+   as thick as the knob (12pt) so WebKit centres the knob on it (a thinner
+   input clips the knob). The visible 4pt line is painted: a stripe inset 2pt
+   at each end, plus a 4pt dot at each end for rounded caps. */
+ytmusic-miniplayer .ytMusicMiniPlayerVolumePopup input {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  width: 12px !important;
+  height: 93px !important;
+  margin: 0 !important;
+  background:
+    radial-gradient(circle 2px at 50% calc(100% - 2px), var(--sp-bar-fill) 98%, transparent) no-repeat,
+    radial-gradient(circle 2px at 50% 2px, var(--sp-track) 98%, transparent) no-repeat,
+    linear-gradient(to top,
+      var(--sp-bar-fill) var(--yt-slider-shape-gradient-percent, 0%),
+      var(--sp-track) var(--yt-slider-shape-gradient-percent, 0%)) center / 4px calc(100% - 4px) no-repeat !important;
+}
+
+ytmusic-miniplayer .ytMusicMiniPlayerProgressBarWrapper:hover,
+ytmusic-miniplayer .ytMusicMiniPlayerVolumePopup:hover {
+  --sp-bar-fill: var(--sp-accent);
+}
+
+ytmusic-miniplayer .ytMusicMiniPlayerVolumePopup input::-webkit-slider-runnable-track {
+  width: 12px !important;
+  background: transparent !important;
+  border: 0 !important;
+}
+
+ytmusic-miniplayer input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  width: 12px !important;
+  height: 12px !important;
+  /* YT Music offsets its knob for its own 4pt track; ours are 12pt (the
+     knob's size), so any margin pushes the knob off the line. */
+  margin: 0 !important;
+  border: 0 !important;
+  border-radius: 50%;
+  background: var(--sp-text) !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+
+ytmusic-miniplayer input[type="range"]:hover::-webkit-slider-thumb {
+  opacity: 1;
+}
+
+/* ---- Menus and dialogs -------------------------------------------------- */
+
+tp-yt-paper-listbox,
+ytmusic-menu-popup-renderer,
+tp-yt-paper-dialog,
+ytmusic-multi-select-menu-renderer {
+  background: var(--sp-highlight) !important;
+  border-radius: var(--sp-radius-art) !important;
+  box-shadow: 0 16px 24px rgba(0, 0, 0, 0.3), 0 6px 8px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* ---- Scrollbars --------------------------------------------------------- */
+
+::-webkit-scrollbar {
+  width: 12px;
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border: 3px solid transparent;
+  border-radius: 6px;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.5);
+}

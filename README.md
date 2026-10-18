@@ -34,6 +34,11 @@ platform:
 - [`shared/bridge/ytm-bridge.js`](shared/bridge/ytm-bridge.js): injected script
   that reports player state and runs commands (play, next, seek, like, volume…)
 - [`shared/PROTOCOL.md`](shared/PROTOCOL.md): the message format both hosts implement
+- [`shared/themes/`](shared/themes/): optional stylesheets the hosts inject, such as
+  `spotify-style.css`, whose colours, spacing, radii, type and control sizes and
+  panel geometry were measured from the installed Spotify desktop client
+  (1.3.0.277). The rules are our own; no Spotify code, fonts, icons or branding
+  are included, and text uses the system font.
 
 When YouTube Music changes its DOM, the fix usually goes in `ytm-bridge.js`
 alone, and every platform picks it up.
@@ -60,12 +65,21 @@ rather than the `.xcodeproj`.
 - **Menu bar controls**:
   - Left-click: mini-player with artwork, a seekable progress bar, play/pause,
     previous/next, like/dislike and volume
+  - Search: type in the popover's search field for a top result plus songs,
+    artists, albums and playlists; click a song to play it, or an artist,
+    album or playlist to open it in the main window
   - Right-click: quick controls menu
   - Optional: current track title next to the icon (Settings)
 - Media keys, AirPods, Control Center and the Lock Screen through Now Playing
 - Dock menu with playback controls
 - Track-change notifications (only while the app is in the background; ads skipped)
 - Closing the window keeps the music playing; click the Dock icon to bring it back
+- Themes: Spotify-style (default) or stock YouTube Music, switchable live in Settings.
+  The Spotify-style theme also changes the window: there's no separate title
+  strip, the traffic lights and back/forward arrows sit in the black top bar,
+  and the top bar's empty space drags the window (double-click zooms)
+- Volume stays in sync between the app's controls and YouTube Music's own
+  slider, and is remembered across launches
 - Keyboard shortcuts:
 
   | Action             | Shortcut |
@@ -80,6 +94,14 @@ rather than the `.xcodeproj`.
   | Home               | ⇧⌘H      |
 
 Debug builds enable the Safari Web Inspector: Safari → Develop → *your Mac* → YT Music.
+They also add **Debug → Evaluate Clipboard JavaScript** (⌃⌥⌘J), which runs the
+clipboard as an async function body in the page and copies the JSON result back.
+It's handy for scripting DOM checks against the real app.
+
+Note: YouTube Music serves different player markup to different browsers.
+WKWebView (Safari) gets the newer `ytmusic-miniplayer` player; Chromium gets the
+classic `ytmusic-player-bar`. The bridge and theme handle both, so check DOM
+changes in the app itself, not only in Chrome.
 
 ### Layout
 

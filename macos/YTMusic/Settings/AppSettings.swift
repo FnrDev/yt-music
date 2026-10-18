@@ -8,6 +8,7 @@ enum AppSettings {
         static let showTitleInMenuBar = "showTitleInMenuBar"
         static let notifyOnTrackChange = "notifyOnTrackChange"
         static let keepPlayingWhenClosed = "keepPlayingWhenClosed"
+        static let theme = "theme"
     }
 
     static func registerDefaults() {
@@ -16,6 +17,7 @@ enum AppSettings {
             Key.showTitleInMenuBar: false,
             Key.notifyOnTrackChange: true,
             Key.keepPlayingWhenClosed: true,
+            Key.theme: ThemeController.Theme.spotifyStyle.rawValue,
         ])
     }
 
@@ -23,4 +25,9 @@ enum AppSettings {
     static var showTitleInMenuBar: Bool { UserDefaults.standard.bool(forKey: Key.showTitleInMenuBar) }
     static var notifyOnTrackChange: Bool { UserDefaults.standard.bool(forKey: Key.notifyOnTrackChange) }
     static var keepPlayingWhenClosed: Bool { UserDefaults.standard.bool(forKey: Key.keepPlayingWhenClosed) }
+
+    @MainActor
+    static var theme: ThemeController.Theme {
+        UserDefaults.standard.string(forKey: Key.theme).flatMap(ThemeController.Theme.init(rawValue:)) ?? .spotifyStyle
+    }
 }

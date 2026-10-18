@@ -20,6 +20,8 @@ Mirrors the macOS app's architecture, so most of the design carries over.
 | `NowPlayingController` (MPNowPlayingInfoCenter)| `SystemMediaTransportControls` (media keys, volume flyout, lock screen)           |
 | `StatusItemController` + mini-player popover   | Notification-area (tray) icon + flyout window; taskbar thumbnail toolbar buttons |
 | `TrackNotifier` (UserNotifications)            | `AppNotificationManager` toast                                                     |
+| `ThemeController` (shared/themes/*.css)        | Same JS snippet via `AddScriptToExecuteOnDocumentCreatedAsync` + `ExecuteScriptAsync` |
+| `VolumeKeeper` (UserDefaults)                  | `ApplicationData.Current.LocalSettings`                                            |
 | `WebNavigationHandler` (allow-list)            | `NavigationStarting` / `NewWindowRequested` → `Launcher.LaunchUriAsync`            |
 | `websiteDataStore = .default()`                | WebView2 user data folder under `%LOCALAPPDATA%`                                   |
 | Hide on close                                  | Hide to tray on close                                                              |

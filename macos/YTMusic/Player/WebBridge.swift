@@ -11,6 +11,13 @@ final class WebBridge: NSObject, WKScriptMessageHandler {
     private let model: PlayerModel
     private weak var webView: WKWebView?
     private let decoder = JSONDecoder()
+    /// The injected bridge script, kept so other scripts can be swapped around it.
+    private(set) var userScript: WKUserScript?
+    /// The page's top bar asks to move or zoom the window (see UnifiedTopBar).
+    var onWindowDrag: (() -> Void)?
+    var onTitleBarDoubleClick: (() -> Void)?
+    /// Replies to `search` commands.
+    var onSearchResults: ((_ requestId: Int, _ results: [SearchResult], _ error: String?) -> Void)?
 
     init(model: PlayerModel) {
         self.model = model
@@ -24,12 +31,14 @@ final class WebBridge: NSObject, WKScriptMessageHandler {
             Self.log.fault("ytm-bridge.js missing from bundle")
             return
         }
-        controller.addUserScript(WKUserScript(
+        let script = WKUserScript(
             source: source,
             injectionTime: .atDocumentEnd,
             forMainFrameOnly: true,
             in: .page
-        ))
+        )
+        userScript = script
+        controller.addUserScript(script)
         // The controller retains its handlers; go through a weak proxy to avoid a cycle.
         controller.add(WeakScriptMessageHandler(self), contentWorld: .page, name: Self.handlerName)
     }
@@ -57,11 +66,18 @@ final class WebBridge: NSObject, WKScriptMessageHandler {
                 model.reset()
             case "state":
                 if let state = envelope.state {
-                    if state.trackKey != model.state.trackKey || state.isPlaying != model.state.isPlaying {
-                        Self.log.debug("state: \(state.title, privacy: .public) — playing=\(state.isPlaying)")
+                    let old = model.state
+                    if state.trackKey != old.trackKey || state.isPlaying != old.isPlaying || state.volume != old.volume {
+                        Self.log.info("state: \(state.title, privacy: .public) — playing=\(state.isPlaying) volume=\(state.volume)")
                     }
                     model.update(state)
                 }
+            case "searchResults":
+                onSearchResults?(envelope.requestId ?? -1, envelope.results ?? [], envelope.error)
+            case "windowDrag":
+                onWindowDrag?()
+            case "windowZoom":
+                onTitleBarDoubleClick?()
             default:
                 break
             }
@@ -74,6 +90,9 @@ final class WebBridge: NSObject, WKScriptMessageHandler {
         let type: String
         let version: Int?
         let state: PlayerState?
+        let requestId: Int?
+        let results: [SearchResult]?
+        let error: String?
     }
 }
 

@@ -24,6 +24,8 @@ targets:
       - path: YTMusic
       - path: ../shared/bridge
         buildPhase: resources
+      - path: ../shared/themes
+        buildPhase: resources
     settings:
       base:
         PRODUCT_NAME: YT Music

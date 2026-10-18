@@ -28,24 +28,65 @@
   };
 
   // ---- DOM helpers -------------------------------------------------------
+  //
+  // YouTube Music serves two player bars depending on browser and rollout:
+  //   - classic: <ytmusic-player-bar> with Polymer controls
+  //   - newer:   <ytmusic-miniplayer> with <ytmusic-wiz-player-controls>
+  // Every lookup below lists the classic selector first, then the newer one.
+  // Selectors rely on structure and class names, never on (localized) labels.
 
   const $ = (selector) => document.querySelector(selector);
-  const playerBar = () => $('ytmusic-player-bar');
+  const firstOf = (...selectors) => {
+    for (const selector of selectors) {
+      const el = $(selector);
+      if (el) return el;
+    }
+    return null;
+  };
+  const playerBar = () => firstOf('ytmusic-player-bar', 'ytmusic-miniplayer');
   const moviePlayer = () => $('#movie_player');
   const video = () => $('video.html5-main-video') || $('video');
 
   const clickFirst = (...selectors) => {
-    for (const selector of selectors) {
-      const el = $(selector);
-      if (el) {
-        el.click();
-        return true;
-      }
-    }
-    return false;
+    const el = firstOf(...selectors);
+    el?.click();
+    return Boolean(el);
   };
 
-  const textOf = (selector) => ($(selector)?.textContent || '').trim();
+  const textOf = (...selectors) => (firstOf(...selectors)?.textContent || '').trim();
+
+  const SELECTORS = {
+    playPause: [
+      'ytmusic-player-bar #play-pause-button',
+      'ytmusic-miniplayer .ytmusicPlayerControlsPlayPauseButton button',
+    ],
+    next: [
+      'ytmusic-player-bar .next-button',
+      'ytmusic-miniplayer .ytmusicPlayerControlsNextButton button',
+    ],
+    previous: [
+      'ytmusic-player-bar .previous-button',
+      'ytmusic-miniplayer .ytmusicPlayerControlsPreviousButton button',
+    ],
+    like: [
+      'ytmusic-player-bar ytmusic-like-button-renderer #button-shape-like button',
+      'ytmusic-miniplayer like-button-view-model button',
+    ],
+    dislike: [
+      'ytmusic-player-bar ytmusic-like-button-renderer #button-shape-dislike button',
+      'ytmusic-miniplayer dislike-button-view-model button',
+    ],
+    artwork: [
+      'ytmusic-player-bar img.image',
+      'ytmusic-miniplayer img',
+    ],
+    title: [
+      'ytmusic-player-bar .title',
+    ],
+    byline: [
+      'ytmusic-player-bar .byline',
+    ],
+  };
 
   // ---- State -------------------------------------------------------------
 
@@ -66,7 +107,7 @@
 
   const currentArtwork = () => {
     // Read the attribute: `.src` on an empty <img> resolves to the page URL.
-    const barSrc = playerBar()?.querySelector('img.image')?.getAttribute('src');
+    const barSrc = firstOf(...SELECTORS.artwork)?.getAttribute('src');
     const barArt = barSrc && /^https?:/.test(barSrc) ? barSrc : null;
     // Songs have square album art on googleusercontent; prefer it over the
     // 16:9 video thumbnail Media Session tends to report.
@@ -81,17 +122,57 @@
   };
 
   const likeStatus = () => {
-    const status = playerBar()
-      ?.querySelector('ytmusic-like-button-renderer')
-      ?.getAttribute('like-status');
-    switch (status) {
-      case 'LIKE': return 'like';
-      case 'DISLIKE': return 'dislike';
-      default: return 'indifferent';
+    // Classic player: a single attribute on the renderer.
+    const status = $('ytmusic-player-bar ytmusic-like-button-renderer')?.getAttribute('like-status');
+    if (status === 'LIKE') return 'like';
+    if (status === 'DISLIKE') return 'dislike';
+    if (status) return 'indifferent';
+    // Newer player: toggle buttons with aria-pressed.
+    if ($(SELECTORS.like[1])?.getAttribute('aria-pressed') === 'true') return 'like';
+    if ($(SELECTORS.dislike[1])?.getAttribute('aria-pressed') === 'true') return 'dislike';
+    return 'indifferent';
+  };
+
+  // Volume goes through YT Music's own slider, never the player API directly.
+  // The slider is on a perceptual 0–100 scale (55 ≈ player volume 24), and
+  // only changes made through it are saved by the site (in its PREF cookie)
+  // and shown in its UI. Setting the player directly desyncs both.
+  //
+  // Classic player: <tp-yt-paper-slider> (a second one is used in narrow
+  // windows; YT Music keeps the two in sync). Newer player: a range <input>.
+  const volumeControl = () => {
+    const paper = $('ytmusic-player-bar #volume-slider');
+    if (paper) {
+      return {
+        get: () => Number(paper.value),
+        set: (value) => {
+          paper.value = value;
+          paper.dispatchEvent(new CustomEvent('change', { bubbles: true }));
+        },
+      };
     }
+    const input = firstOf(
+      'ytmusic-miniplayer .ytMusicMiniPlayerVolumeWrapper input[type="range"]',
+      'ytmusic-miniplayer input[type="range"]:not(.ytMusicMiniPlayerProgressBar)',
+    );
+    if (input) {
+      return {
+        get: () => Number(input.value),
+        set: (value) => {
+          // Use the native setter so the page's listeners see a real change.
+          const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+          setter.call(input, String(value));
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+        },
+      };
+    }
+    return null;
   };
 
   const currentVolume = () => {
+    const value = volumeControl()?.get();
+    if (Number.isFinite(value)) return Math.round(value);
     const player = moviePlayer();
     if (player?.getVolume) return Math.round(player.getVolume());
     const v = video();
@@ -101,8 +182,8 @@
   const snapshot = () => {
     const v = video();
     const meta = navigator.mediaSession?.metadata;
-    const title = meta?.title || textOf('ytmusic-player-bar .title');
-    const byline = textOf('ytmusic-player-bar .byline');
+    const title = meta?.title || textOf(...SELECTORS.title);
+    const byline = textOf(...SELECTORS.byline);
     const videoData = moviePlayer()?.getVideoData?.();
     const duration = v && Number.isFinite(v.duration) ? v.duration : 0;
 
@@ -133,6 +214,139 @@
     post({ type: 'state', state });
   };
 
+  // ---- Search ------------------------------------------------------------
+  //
+  // Runs the same request YT Music's own search box makes, in the signed-in
+  // page, and reduces the response to simple result records for the host.
+
+  const runsText = (text) =>
+    (text?.runs || []).map((run) => run.text).join('') || text?.simpleText || '';
+
+  const thumbnailOf = (renderer) => {
+    const list = renderer?.musicThumbnailRenderer?.thumbnail?.thumbnails
+      || renderer?.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails
+      || renderer?.thumbnails || [];
+    return list.length ? list[list.length - 1].url : null;
+  };
+
+  const KIND_BY_PAGE_TYPE = {
+    MUSIC_PAGE_TYPE_ARTIST: 'artist',
+    MUSIC_PAGE_TYPE_USER_CHANNEL: 'artist',
+    MUSIC_PAGE_TYPE_ALBUM: 'album',
+    MUSIC_PAGE_TYPE_AUDIOBOOK: 'album',
+    MUSIC_PAGE_TYPE_PLAYLIST: 'playlist',
+    MUSIC_PAGE_TYPE_PODCAST_SHOW_DETAIL_PAGE: 'podcast',
+    MUSIC_PAGE_TYPE_NON_MUSIC_AUDIO_TRACK_PAGE: 'episode',
+  };
+
+  const resultFrom = ({ title, subtitle, thumbnail, watch, browse }) => {
+    if (!title || (!watch?.videoId && !browse?.browseId)) return null;
+    const pageType = browse?.browseEndpointContextSupportedConfigs?.browseEndpointContextMusicConfig?.pageType;
+    const videoType = watch?.watchEndpointMusicSupportedConfigs?.watchEndpointMusicConfig?.musicVideoType;
+    const kind = browse?.browseId
+      ? (KIND_BY_PAGE_TYPE[pageType] || 'page')
+      : (videoType === 'MUSIC_VIDEO_TYPE_ATV' ? 'song' : 'video');
+    return {
+      id: browse?.browseId || watch.videoId,
+      kind,
+      title,
+      subtitle: subtitle || '',
+      thumbnailURL: thumbnail,
+      videoId: watch?.videoId || null,
+      playlistId: watch?.playlistId || null,
+      browseId: browse?.browseId || null,
+      pageType: pageType || null,
+    };
+  };
+
+  const fromListItem = (item) => {
+    const columns = (item.flexColumns || []).map((c) => c.musicResponsiveListItemFlexColumnRenderer?.text);
+    const titleRun = columns[0]?.runs?.[0];
+    return resultFrom({
+      title: runsText(columns[0]),
+      subtitle: columns.slice(1).map(runsText).filter(Boolean).join(' • '),
+      thumbnail: thumbnailOf(item.thumbnail),
+      watch: item.overlay?.musicItemThumbnailOverlayRenderer?.content?.musicPlayButtonRenderer
+        ?.playNavigationEndpoint?.watchEndpoint
+        || titleRun?.navigationEndpoint?.watchEndpoint
+        || (item.playlistItemData?.videoId ? { videoId: item.playlistItemData.videoId } : null),
+      browse: item.navigationEndpoint?.browseEndpoint || titleRun?.navigationEndpoint?.browseEndpoint,
+    });
+  };
+
+  const fromCard = (card) => {
+    const endpoint = card.title?.runs?.[0]?.navigationEndpoint || card.onTap || {};
+    return resultFrom({
+      title: runsText(card.title),
+      subtitle: runsText(card.subtitle),
+      thumbnail: thumbnailOf(card.thumbnail),
+      watch: endpoint.watchEndpoint,
+      browse: endpoint.browseEndpoint,
+    });
+  };
+
+  // Walks the response for result renderers, in document order, so the shape
+  // of the surrounding shelves can change without breaking this.
+  const collectResults = (response) => {
+    const results = [];
+    const seen = new Set();
+    const add = (result) => {
+      if (result && !seen.has(result.id)) {
+        seen.add(result.id);
+        results.push(result);
+      }
+    };
+    const walk = (node, depth) => {
+      if (!node || typeof node !== 'object' || depth > 40) return;
+      if (node.musicCardShelfRenderer) add(fromCard(node.musicCardShelfRenderer));
+      if (node.musicResponsiveListItemRenderer) {
+        add(fromListItem(node.musicResponsiveListItemRenderer));
+        return;
+      }
+      for (const value of Object.values(node)) walk(value, depth + 1);
+    };
+    walk(response, 0);
+    return results;
+  };
+
+  const innertube = async (endpoint, body) => {
+    const cfg = window.ytcfg;
+    const context = cfg?.get?.('INNERTUBE_CONTEXT');
+    if (!context) throw new Error('YT Music is still loading');
+    const key = cfg.get('INNERTUBE_API_KEY');
+    const response = await fetch(`/youtubei/v1/${endpoint}?prettyPrint=false${key ? `&key=${key}` : ''}`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Youtube-Client-Name': String(cfg.get('INNERTUBE_CONTEXT_CLIENT_NAME') ?? 67),
+        'X-Youtube-Client-Version': String(cfg.get('INNERTUBE_CLIENT_VERSION') ?? ''),
+      },
+      body: JSON.stringify({ context, ...body }),
+    });
+    if (!response.ok) throw new Error(`Search failed (${response.status})`);
+    return response.json();
+  };
+
+  const search = async ({ query, requestId }) => {
+    try {
+      const results = collectResults(await innertube('search', { query })).slice(0, 30);
+      post({ type: 'searchResults', requestId, query, results });
+    } catch (error) {
+      post({ type: 'searchResults', requestId, query, results: [], error: String(error.message || error) });
+    }
+  };
+
+  // In-app navigation through YT Music's own router (no page reload).
+  const navigate = (endpoint, fallbackPath) => {
+    const app = $('ytmusic-app');
+    if (app) {
+      app.dispatchEvent(new CustomEvent('yt-navigate', { bubbles: true, composed: true, detail: { endpoint } }));
+    } else {
+      location.assign(fallbackPath);
+    }
+  };
+
   // ---- Commands ----------------------------------------------------------
 
   const isPlaying = () => {
@@ -141,21 +355,27 @@
   };
 
   const togglePlayback = () =>
-    clickFirst('ytmusic-player-bar #play-pause-button', 'ytmusic-player-bar .play-pause-button')
+    clickFirst(...SELECTORS.playPause)
       || (isPlaying() ? video()?.pause() : video()?.play());
 
   const commands = {
     playPause: togglePlayback,
     play: () => { if (!isPlaying()) togglePlayback(); },
     pause: () => { if (isPlaying()) togglePlayback(); },
-    next: () => clickFirst('ytmusic-player-bar .next-button', 'ytmusic-player-bar [aria-label="Next"]'),
-    previous: () => clickFirst('ytmusic-player-bar .previous-button', 'ytmusic-player-bar [aria-label="Previous"]'),
+    next: () => clickFirst(...SELECTORS.next),
+    previous: () => clickFirst(...SELECTORS.previous),
     seek: (seconds) => {
       const v = video();
       if (v && Number.isFinite(seconds)) v.currentTime = Math.max(0, seconds);
     },
     setVolume: (volume) => {
       const clamped = Math.max(0, Math.min(100, Math.round(volume)));
+      const control = volumeControl();
+      if (control) {
+        control.set(clamped);
+        return;
+      }
+      // Last resort when no slider is on the page; not saved by the site.
       const player = moviePlayer();
       if (player?.setVolume) {
         player.setVolume(clamped);
@@ -164,14 +384,23 @@
         video().volume = clamped / 100;
       }
     },
-    like: () => clickFirst(
-      'ytmusic-player-bar ytmusic-like-button-renderer #button-shape-like button',
-      'ytmusic-player-bar ytmusic-like-button-renderer .like',
+    like: () => clickFirst(...SELECTORS.like),
+    dislike: () => clickFirst(...SELECTORS.dislike),
+    search,
+    playItem: ({ videoId, playlistId }) => navigate(
+      { watchEndpoint: { videoId, ...(playlistId ? { playlistId } : {}) } },
+      `/watch?v=${encodeURIComponent(videoId)}${playlistId ? `&list=${encodeURIComponent(playlistId)}` : ''}`,
     ),
-    dislike: () => clickFirst(
-      'ytmusic-player-bar ytmusic-like-button-renderer #button-shape-dislike button',
-      'ytmusic-player-bar ytmusic-like-button-renderer .dislike',
+    openItem: ({ browseId, pageType }) => navigate(
+      {
+        browseEndpoint: {
+          browseId,
+          ...(pageType ? { browseEndpointContextSupportedConfigs: { browseEndpointContextMusicConfig: { pageType } } } : {}),
+        },
+      },
+      `/browse/${encodeURIComponent(browseId)}`,
     ),
+    openSearch: (query) => navigate({ searchEndpoint: { query } }, `/search?q=${encodeURIComponent(query)}`),
     focusSearch: () => {
       clickFirst('ytmusic-search-box #placeholder', 'ytmusic-search-box');
       const input = $('ytmusic-search-box input');
@@ -199,6 +428,10 @@
     'loadedmetadata', 'ended', 'volumechange', 'emptied']) {
     document.addEventListener(event, () => report(true), true);
   }
+  // The newer player's volume input changes before the media element does.
+  document.addEventListener('input', (event) => {
+    if (event.target?.closest?.('ytmusic-miniplayer, ytmusic-player-bar')) report();
+  }, true);
 
   // Like status and metadata live in the player bar's DOM attributes.
   const observeBar = () => {
@@ -207,13 +440,30 @@
     new MutationObserver(() => report()).observe(bar, {
       subtree: true,
       attributes: true,
-      attributeFilter: ['like-status', 'title', 'src'],
+      attributeFilter: ['like-status', 'aria-pressed', 'title', 'src'],
     });
     return true;
   };
   if (!observeBar()) {
     const waitForBar = setInterval(() => { if (observeBar()) clearInterval(waitForBar); }, 1000);
   }
+
+  // ---- Window chrome -----------------------------------------------------
+  //
+  // Hosts that draw the page under their title bar (the macOS Spotify-style
+  // theme) let empty parts of YT Music's top bar act as a title bar. Hosts
+  // that don't need this ignore the messages.
+  const DRAG_SURFACES = 'ytmusic-nav-bar, #nav-bar-background';
+  const INTERACTIVE = 'a, button, input, [role="button"], yt-icon-button, '
+    + 'tp-yt-paper-icon-button, ytmusic-search-box, ytmusic-settings-button, ytmusic-logo';
+  const isDragSurface = (target) =>
+    target instanceof Element && target.closest(DRAG_SURFACES) && !target.closest(INTERACTIVE);
+  document.addEventListener('mousedown', (event) => {
+    if (event.button === 0 && event.detail === 1 && isDragSurface(event.target)) post({ type: 'windowDrag' });
+  }, true);
+  document.addEventListener('dblclick', (event) => {
+    if (isDragSurface(event.target)) post({ type: 'windowZoom' });
+  }, true);
 
   setInterval(report, 1000);
 

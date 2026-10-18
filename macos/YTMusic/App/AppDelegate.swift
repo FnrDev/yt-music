@@ -10,17 +10,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var nowPlaying: NowPlayingController!
     private var notifier: TrackNotifier!
     private var statusItem: StatusItemController!
+    private var volumeKeeper: VolumeKeeper!
+    private var search: SearchModel!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppSettings.registerDefaults()
 
         artworkLoader.bind(to: model)
+        volumeKeeper = VolumeKeeper(model: model)
         bridge = WebBridge(model: model)
+        search = SearchModel(player: model)
+        bridge.onSearchResults = { [weak search] requestId, results, error in
+            search?.receive(requestId: requestId, results: results, error: error)
+        }
         windowController = MainWindowController(bridge: bridge)
         actions = PlayerMenuActions(model: model, windowController: windowController)
         nowPlaying = NowPlayingController(model: model, artworkLoader: artworkLoader)
         notifier = TrackNotifier(model: model, artworkLoader: artworkLoader)
-        statusItem = StatusItemController(model: model, actions: actions)
+        statusItem = StatusItemController(model: model, search: search, actions: actions)
 
         NSApp.mainMenu = MainMenu.build(actions: actions, windowController: windowController)
         windowController.show()

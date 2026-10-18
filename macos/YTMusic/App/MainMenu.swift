@@ -12,6 +12,16 @@ enum MainMenu {
         let window = windowMenu(actions: actions)
         main.addItem(submenu(window))
         NSApp.windowsMenu = window
+        #if DEBUG
+        let debug = NSMenu(title: "Debug")
+        debug.addItem(item(
+            "Evaluate Clipboard JavaScript",
+            #selector(MainWindowController.evaluateClipboardJavaScript(_:)),
+            "j", [.command, .option, .control],
+            target: windowController
+        ))
+        main.addItem(submenu(debug))
+        #endif
         return main
     }
 

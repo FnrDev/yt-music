@@ -5,12 +5,15 @@ import WebKit
 final class MainWindowController: NSWindowController, NSWindowDelegate {
     static let homeURL = URL(string: "https://music.youtube.com/")!
 
-    let webView: WKWebView
+    let webView: HostWebView
     private let navigation = WebNavigationHandler()
+    private let theme: ThemeController
     private let spinner = NSProgressIndicator()
     private var loadObservation: NSKeyValueObservation?
     private var urlObservation: NSKeyValueObservation?
     private let navigationAccessory = NSTitlebarAccessoryViewController()
+    private var topBar: UnifiedTopBar!
+    private var isOffYTMusic = false
 
     init(bridge: WebBridge) {
         let configuration = WKWebViewConfiguration()
@@ -21,8 +24,10 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         // Without a Safari token Google sign-in rejects the view as an "insecure browser".
         configuration.applicationNameForUserAgent = "Version/26.0 Safari/605.1.15"
         bridge.install(into: configuration.userContentController)
+        theme = ThemeController(bridge: bridge)
+        theme.install(into: configuration.userContentController)
 
-        webView = WKWebView(frame: .zero, configuration: configuration)
+        webView = HostWebView(frame: .zero, configuration: configuration)
         webView.allowsBackForwardNavigationGestures = true
         webView.allowsMagnification = true
         webView.underPageBackgroundColor = .ytBackground
@@ -48,13 +53,21 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         super.init(window: window)
 
         window.delegate = self
-        window.contentView = makeContentView()
+        let content = makeContentView()
+        window.contentView = content
+        topBar = UnifiedTopBar(window: window, webView: webView, in: content)
         window.center()
         window.setFrameAutosaveName("MainWindow")
 
         webView.navigationDelegate = navigation
         webView.uiDelegate = navigation
         bridge.attach(to: webView)
+        bridge.onWindowDrag = { [weak self] in self?.topBar.beginDrag() }
+        bridge.onTitleBarDoubleClick = { [weak self] in self?.topBar.titleBarDoubleClicked() }
+        theme.attach(to: webView)
+        // The Spotify-style theme draws its own top bar under the traffic lights.
+        theme.onThemeApplied = { [weak self] theme in self?.applyChrome(for: theme) }
+        applyChrome(for: AppSettings.theme)
 
         loadObservation = webView.observe(\.isLoading, options: [.initial, .new]) { [weak self] webView, _ in
             MainActor.assumeIsolated {
@@ -64,12 +77,14 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         }
 
         installNavigationAccessory(in: window)
+        updateNavigationAccessory()
         urlObservation = webView.observe(\.url, options: [.initial, .new]) { [weak self] webView, _ in
             MainActor.assumeIsolated {
                 // YT Music has its own navigation; Google sign-in and other
                 // in-app pages don't, so offer a way back from those.
                 let onYTMusic = webView.url?.host?.lowercased() == Self.homeURL.host
-                self?.navigationAccessory.isHidden = webView.url == nil || onYTMusic
+                self?.isOffYTMusic = webView.url != nil && !onYTMusic
+                self?.updateNavigationAccessory()
             }
         }
 
@@ -109,6 +124,26 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         window.addTitlebarAccessoryViewController(navigationAccessory)
     }
 
+    private func applyChrome(for theme: ThemeController.Theme) {
+        topBar?.setEnabled(theme == .spotifyStyle)
+        updateNavigationAccessory()
+    }
+
+    private func updateNavigationAccessory() {
+        guard let window else { return }
+        // The unified top bar has its own back/forward arrows, so the accessory
+        // is detached there (AppKit re-shows hidden accessories when the window
+        // style changes).
+        let unified = topBar?.isEnabled ?? false
+        let attached = window.titlebarAccessoryViewControllers.contains(navigationAccessory)
+        if unified, attached, let index = window.titlebarAccessoryViewControllers.firstIndex(of: navigationAccessory) {
+            window.removeTitlebarAccessoryViewController(at: index)
+        } else if !unified, !attached, navigationAccessory.view.frame.width > 0 {
+            window.addTitlebarAccessoryViewController(navigationAccessory)
+        }
+        navigationAccessory.isHidden = !isOffYTMusic
+    }
+
     private func makeContentView() -> NSView {
         let container = NSView()
         container.wantsLayer = true
@@ -138,6 +173,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         showWindow(nil)
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate()
+        topBar.setNeedsTrafficLightLayout()
     }
 
     // MARK: - NSWindowDelegate
@@ -164,6 +200,27 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
     @objc func goBack(_ sender: Any?) { webView.goBack() }
     @objc func goForward(_ sender: Any?) { webView.goForward() }
     @objc func reload(_ sender: Any?) { webView.reload() }
+
+    #if DEBUG
+    /// Debug builds only: runs the clipboard as an async JS function body in the
+    /// page and puts the JSON result back on the clipboard. Lets tooling inspect
+    /// the live DOM without the Web Inspector.
+    @objc func evaluateClipboardJavaScript(_ sender: Any?) {
+        let pasteboard = NSPasteboard.general
+        guard let body = pasteboard.string(forType: .string) else { return }
+        let wrapped = "const result = await (async () => { \(body) })(); return JSON.stringify(result ?? null);"
+        Task {
+            let output: String
+            do {
+                output = (try await webView.callAsyncJavaScript(wrapped, contentWorld: .page) as? String) ?? "null"
+            } catch {
+                output = "ERROR: \(error)"
+            }
+            pasteboard.clearContents()
+            pasteboard.setString(output, forType: .string)
+        }
+    }
+    #endif
 
     @objc func zoomIn(_ sender: Any?) { webView.pageZoom = min(webView.pageZoom + 0.1, 2.0) }
     @objc func zoomOut(_ sender: Any?) { webView.pageZoom = max(webView.pageZoom - 0.1, 0.5) }

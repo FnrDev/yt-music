@@ -7,6 +7,7 @@ import SwiftUI
 @MainActor
 final class StatusItemController: NSObject {
     private let model: PlayerModel
+    private let search: SearchModel
     private let actions: PlayerMenuActions
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let popover = NSPopover()
@@ -15,8 +16,9 @@ final class StatusItemController: NSObject {
 
     private static let maxTitleLength = 32
 
-    init(model: PlayerModel, actions: PlayerMenuActions) {
+    init(model: PlayerModel, search: SearchModel, actions: PlayerMenuActions) {
         self.model = model
+        self.search = search
         self.actions = actions
         super.init()
 
@@ -25,6 +27,7 @@ final class StatusItemController: NSObject {
         popover.animates = true
         hosting = NSHostingController(rootView: MiniPlayerView(
             model: model,
+            search: search,
             onShowWindow: { [weak self] in
                 self?.popover.performClose(nil)
                 actions.showMainWindow(nil)
@@ -60,6 +63,29 @@ final class StatusItemController: NSObject {
             MainActor.assumeIsolated { self?.applySettings() }
         }
         applySettings()
+        observeSearchLayout()
+    }
+
+    /// The results list appears and disappears with the query; resize the
+    /// popover explicitly each time (letting it track SwiftUI's size makes it
+    /// grow upward, off the top of the screen).
+    private func observeSearchLayout() {
+        withObservationTracking {
+            _ = search.isActive
+        } onChange: { [weak self] in
+            Task { @MainActor in
+                self?.resizePopover()
+                self?.observeSearchLayout()
+            }
+        }
+    }
+
+    private func resizePopover() {
+        guard popover.isShown else { return }
+        popover.contentSize = hosting.sizeThatFits(in: NSSize(
+            width: MiniPlayerView.width,
+            height: .greatestFiniteMagnitude
+        ))
     }
 
     private func applySettings() {
@@ -107,6 +133,10 @@ final class StatusItemController: NSObject {
                 width: MiniPlayerView.width,
                 height: .greatestFiniteMagnitude
             ))
+            // No NSApp.activate() here: activation completes asynchronously and
+            // makes the main window key, which closes a transient popover.
+            // Clicking into the search field activates the app with the
+            // popover's window key, which is all typing needs.
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             popover.contentViewController?.view.window?.makeKey()
         }
