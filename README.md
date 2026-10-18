@@ -65,9 +65,14 @@ rather than the `.xcodeproj`.
 - **Menu bar controls**:
   - Left-click: mini-player with artwork, a seekable progress bar, play/pause,
     previous/next, like/dislike and volume
-  - Search: type in the popover's search field for a top result plus songs,
-    artists, albums and playlists; click a song to play it, or an artist,
-    album or playlist to open it in the main window
+  - Search with YT Music's own filters (Songs, Videos, Artists, …): click to
+    play, or right-click / "…" for Play Next, Add to Queue and Go to Artist /
+    Album / Playlist
+  - Library tab: recently played and your playlists
+  - Up Next tab: the current queue; click a track to skip ahead to it
+  - Lyrics tab: the current song's lyrics from YT Music, with its source credit
+    (right-to-left scripts are right-aligned)
+  - Shuffle and repeat toggles (also in the Playback menu)
   - Right-click: quick controls menu
   - Optional: current track title next to the icon (Settings)
 - Media keys, AirPods, Control Center and the Lock Screen through Now Playing
@@ -77,7 +82,8 @@ rather than the `.xcodeproj`.
 - Themes: Spotify-style (default) or stock YouTube Music, switchable live in Settings.
   The Spotify-style theme also changes the window: there's no separate title
   strip, the traffic lights and back/forward arrows sit in the black top bar,
-  and the top bar's empty space drags the window (double-click zooms)
+  and the top bar's empty space drags the window (double-click zooms). It hides
+  YT Music's sidebar; Home is the round button beside search
 - Volume stays in sync between the app's controls and YouTube Music's own
   slider, and is remembered across launches
 - Keyboard shortcuts:

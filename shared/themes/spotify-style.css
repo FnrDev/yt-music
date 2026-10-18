@@ -112,6 +112,22 @@ ytmusic-app[guide-collapsed] ytmusic-app-layout {
   --sp-sidebar-width: 80px;
 }
 
+/* No sidebar: the guide, its collapsed rail and the menu button that toggles
+   them are hidden, and the main panel takes the full width. Home is the
+   round button in the top bar. (Delete this block to bring the sidebar back;
+   the library-panel styling below still applies.) */
+ytmusic-app-layout,
+ytmusic-app[guide-collapsed] ytmusic-app-layout {
+  --sp-sidebar-width: 0px;
+}
+
+#guide-wrapper.ytmusic-app,
+#mini-guide.ytmusic-app-layout,
+#mini-guide-background.ytmusic-app-layout,
+ytmusic-nav-bar #guide-button {
+  display: none !important;
+}
+
 /* Collapsed rail: a rounded panel of icons, no labels. */
 ytmusic-app[guide-collapsed] #mini-guide-background {
   width: var(--sp-sidebar-width) !important;

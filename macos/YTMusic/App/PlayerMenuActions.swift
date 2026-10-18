@@ -22,6 +22,8 @@ final class PlayerMenuActions: NSObject, NSMenuItemValidation {
     @objc func dislike(_ sender: Any?) { model.send(.dislike) }
     @objc func volumeUp(_ sender: Any?) { model.adjustVolume(by: 10) }
     @objc func volumeDown(_ sender: Any?) { model.adjustVolume(by: -10) }
+    @objc func toggleShuffle(_ sender: Any?) { model.send(.toggleShuffle) }
+    @objc func cycleRepeat(_ sender: Any?) { model.send(.cycleRepeat) }
     @objc func seekForward(_ sender: Any?) { model.send(.seek(model.position() + 10)) }
     @objc func seekBackward(_ sender: Any?) { model.send(.seek(max(model.position() - 10, 0))) }
 
@@ -58,6 +60,17 @@ final class PlayerMenuActions: NSObject, NSMenuItemValidation {
             return state.hasTrack
         case #selector(dislike(_:)):
             item.state = state.likeStatus == .dislike ? .on : .off
+            return state.hasTrack
+        case #selector(toggleShuffle(_:)):
+            item.state = state.shuffle ? .on : .off
+            return state.hasTrack
+        case #selector(cycleRepeat(_:)):
+            item.title = switch state.repeatMode {
+            case .none: "Repeat: Off"
+            case .all: "Repeat: All"
+            case .one: "Repeat: One"
+            }
+            item.state = state.repeatMode == .none ? .off : .on
             return state.hasTrack
         case #selector(nextTrack(_:)), #selector(previousTrack(_:)),
              #selector(seekForward(_:)), #selector(seekBackward(_:)),
@@ -114,6 +127,9 @@ final class PlayerMenuActions: NSObject, NSMenuItemValidation {
         menu.addItem(.separator())
         menu.addItem(item("Volume Up", #selector(volumeUp(_:)), key: arrow(NSUpArrowFunctionKey), modifiers: [.command]))
         menu.addItem(item("Volume Down", #selector(volumeDown(_:)), key: arrow(NSDownArrowFunctionKey), modifiers: [.command]))
+        menu.addItem(.separator())
+        menu.addItem(item("Shuffle", #selector(toggleShuffle(_:)), key: "s", modifiers: [.command, .control]))
+        menu.addItem(item("Repeat", #selector(cycleRepeat(_:)), key: "r", modifiers: [.command, .control]))
         menu.addItem(.separator())
         menu.addItem(item("Like", #selector(like(_:)), key: "l", modifiers: [.command]))
         menu.addItem(item("Dislike", #selector(dislike(_:)), key: "l", modifiers: [.command, .shift]))

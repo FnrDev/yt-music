@@ -76,6 +76,14 @@
       'ytmusic-player-bar ytmusic-like-button-renderer #button-shape-dislike button',
       'ytmusic-miniplayer dislike-button-view-model button',
     ],
+    shuffle: [
+      'ytmusic-player-bar .shuffle',
+      'ytmusic-miniplayer .ytmusicPlayerControlsShuffleButton button',
+    ],
+    repeat: [
+      'ytmusic-player-bar .repeat',
+      'ytmusic-miniplayer .ytmusicPlayerControlsRepeatButton button',
+    ],
     artwork: [
       'ytmusic-player-bar img.image',
       'ytmusic-miniplayer img',
@@ -179,6 +187,12 @@
     return v ? Math.round(v.volume * 100) : 100;
   };
 
+  // YT Music's app store (Redux-style); holds the queue, shuffle and repeat.
+  const appStore = () => $('ytmusic-player-queue')?.queue?.store || null;
+  const queueState = () => {
+    try { return appStore()?.getState?.().queue || null; } catch (_) { return null; }
+  };
+
   const snapshot = () => {
     const v = video();
     const meta = navigator.mediaSession?.metadata;
@@ -200,6 +214,8 @@
       duration,
       likeStatus: likeStatus(),
       volume: currentVolume(),
+      shuffle: Boolean(queueState()?.shuffleEnabled),
+      repeatMode: ({ ALL: 'all', ONE: 'one' })[queueState()?.repeatMode] || 'none',
     };
   };
 
@@ -239,23 +255,37 @@
     MUSIC_PAGE_TYPE_NON_MUSIC_AUDIO_TRACK_PAGE: 'episode',
   };
 
-  const resultFrom = ({ title, subtitle, thumbnail, watch, browse }) => {
+  // Queue actions ("Play next" / "Add to queue") for the latest results, kept
+  // here by result id; the host refers to them with queueResult({id}).
+  const resultMenus = new Map();
+
+  const queueMenuItems = (menu) => {
+    const entries = (menu?.menuRenderer?.items || []).map((item) => item.menuServiceItemRenderer).filter(Boolean);
+    const at = (position) => entries.find((m) => m.serviceEndpoint?.queueAddEndpoint?.queueInsertPosition === position);
+    return { next: at('INSERT_AFTER_CURRENT_VIDEO'), end: at('INSERT_AT_END') };
+  };
+
+  const resultFrom = ({ title, subtitle, thumbnail, watch, watchPlaylist, browse, menu }) => {
     if (!title || (!watch?.videoId && !browse?.browseId)) return null;
     const pageType = browse?.browseEndpointContextSupportedConfigs?.browseEndpointContextMusicConfig?.pageType;
     const videoType = watch?.watchEndpointMusicSupportedConfigs?.watchEndpointMusicConfig?.musicVideoType;
     const kind = browse?.browseId
       ? (KIND_BY_PAGE_TYPE[pageType] || 'page')
       : (videoType === 'MUSIC_VIDEO_TYPE_ATV' ? 'song' : 'video');
+    const id = browse?.browseId || watch.videoId;
+    const queue = queueMenuItems(menu);
+    if (queue.next || queue.end) resultMenus.set(id, queue);
     return {
-      id: browse?.browseId || watch.videoId,
+      id,
       kind,
       title,
       subtitle: subtitle || '',
       thumbnailURL: thumbnail,
       videoId: watch?.videoId || null,
-      playlistId: watch?.playlistId || null,
+      playlistId: watch?.playlistId || watchPlaylist?.playlistId || null,
       browseId: browse?.browseId || null,
       pageType: pageType || null,
+      canQueue: Boolean(queue.next || queue.end),
     };
   };
 
@@ -271,6 +301,21 @@
         || titleRun?.navigationEndpoint?.watchEndpoint
         || (item.playlistItemData?.videoId ? { videoId: item.playlistItemData.videoId } : null),
       browse: item.navigationEndpoint?.browseEndpoint || titleRun?.navigationEndpoint?.browseEndpoint,
+      menu: item.menu,
+    });
+  };
+
+  // Grid cards (library playlists, albums, mixes).
+  const fromTwoRow = (item) => {
+    const play = item.thumbnailOverlay?.musicItemThumbnailOverlayRenderer?.content?.musicPlayButtonRenderer?.playNavigationEndpoint;
+    return resultFrom({
+      title: runsText(item.title),
+      subtitle: runsText(item.subtitle),
+      thumbnail: thumbnailOf(item.thumbnailRenderer),
+      watch: item.navigationEndpoint?.watchEndpoint || null,
+      watchPlaylist: play?.watchPlaylistEndpoint || play?.watchEndpoint,
+      browse: item.navigationEndpoint?.browseEndpoint,
+      menu: item.menu,
     });
   };
 
@@ -282,6 +327,7 @@
       thumbnail: thumbnailOf(card.thumbnail),
       watch: endpoint.watchEndpoint,
       browse: endpoint.browseEndpoint,
+      menu: card.menu,
     });
   };
 
@@ -303,10 +349,34 @@
         add(fromListItem(node.musicResponsiveListItemRenderer));
         return;
       }
+      if (node.musicTwoRowItemRenderer) {
+        add(fromTwoRow(node.musicTwoRowItemRenderer));
+        return;
+      }
       for (const value of Object.values(node)) walk(value, depth + 1);
     };
     walk(response, 0);
     return results;
+  };
+
+  // Signed-in requests (history, library) must say which session they're
+  // for, the way YT Music's own requests do: a SAPISIDHASH derived from the
+  // session cookie plus the account index. Public ones (search) work without.
+  const sessionCookie = (name) =>
+    document.cookie.split('; ').find((c) => c.startsWith(`${name}=`))?.slice(name.length + 1);
+
+  const authHeaders = async () => {
+    const sapisid = sessionCookie('SAPISID') || sessionCookie('__Secure-3PAPISID');
+    if (!sapisid || !crypto?.subtle) return {};
+    const timestamp = Math.floor(Date.now() / 1000);
+    const digest = await crypto.subtle.digest(
+      'SHA-1', new TextEncoder().encode(`${timestamp} ${sapisid} ${location.origin}`));
+    const hash = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+    return {
+      Authorization: `SAPISIDHASH ${timestamp}_${hash}`,
+      'X-Goog-AuthUser': String(window.ytcfg?.get?.('SESSION_INDEX') ?? 0),
+      'X-Origin': location.origin,
+    };
   };
 
   const innertube = async (endpoint, body) => {
@@ -321,6 +391,7 @@
         'Content-Type': 'application/json',
         'X-Youtube-Client-Name': String(cfg.get('INNERTUBE_CONTEXT_CLIENT_NAME') ?? 67),
         'X-Youtube-Client-Version': String(cfg.get('INNERTUBE_CLIENT_VERSION') ?? ''),
+        ...(await authHeaders()),
       },
       body: JSON.stringify({ context, ...body }),
     });
@@ -328,13 +399,120 @@
     return response.json();
   };
 
-  const search = async ({ query, requestId }) => {
+  // Filter chips (Songs, Artists, Albums…) exactly as YT Music offers them.
+  const collectFilters = (response) => {
+    const filters = [];
+    const walk = (node, depth) => {
+      if (!node || typeof node !== 'object' || depth > 30) return;
+      const chip = node.chipCloudChipRenderer;
+      if (chip) {
+        const params = chip.navigationEndpoint?.searchEndpoint?.params;
+        const title = runsText(chip.text);
+        if (title && params) filters.push({ title, params, isSelected: Boolean(chip.isSelected) });
+        return;
+      }
+      for (const value of Object.values(node)) walk(value, depth + 1);
+    };
+    walk(response, 0);
+    return filters;
+  };
+
+  const search = async ({ query, params, requestId }) => {
     try {
-      const results = collectResults(await innertube('search', { query })).slice(0, 30);
-      post({ type: 'searchResults', requestId, query, results });
+      const response = await innertube('search', { query, ...(params ? { params } : {}) });
+      const results = collectResults(response).slice(0, 40);
+      post({ type: 'searchResults', requestId, query, results, filters: collectFilters(response) });
     } catch (error) {
-      post({ type: 'searchResults', requestId, query, results: [], error: String(error.message || error) });
+      post({ type: 'searchResults', requestId, query, results: [], filters: [], error: String(error.message || error) });
     }
+  };
+
+  // ---- Library, queue and lyrics ----------------------------------------
+
+  const library = async ({ requestId }) => {
+    const settle = (promise) => promise.then(collectResults, () => []);
+    const [recent, playlists] = await Promise.all([
+      settle(innertube('browse', { browseId: 'FEmusic_history' })),
+      settle(innertube('browse', { browseId: 'FEmusic_liked_playlists' })),
+    ]);
+    post({ type: 'library', requestId, recent: recent.slice(0, 12), playlists: playlists.slice(0, 30) });
+  };
+
+  // Each queue entry can render twice: its primary version and an alternate
+  // "counterpart" (the song/video toggle). Only primaries are in the queue
+  // that playback follows.
+  const queueItems = () => [...document.querySelectorAll('ytmusic-player-queue ytmusic-player-queue-item')]
+    .filter((item) => !item.closest('#counterpart-renderer'));
+
+  const queue = ({ requestId }) => {
+    // Guard against more than one element marked selected: only the first
+    // is the current track.
+    let currentSeen = false;
+    const items = queueItems().slice(0, 80).map((item, index) => {
+      const data = item.data || {};
+      const isCurrent = !currentSeen && item.hasAttribute('selected');
+      if (isCurrent) currentSeen = true;
+      return data.videoId ? {
+        index,
+        videoId: data.videoId,
+        title: runsText(data.title),
+        subtitle: runsText(data.shortBylineText || data.longBylineText),
+        duration: runsText(data.lengthText),
+        thumbnailURL: thumbnailOf(data.thumbnail),
+        isCurrent,
+      } : null;
+    }).filter(Boolean);
+    post({ type: 'queue', requestId, items });
+  };
+
+  const findDeep = (node, predicate, depth = 0) => {
+    if (!node || typeof node !== 'object' || depth > 40) return null;
+    if (predicate(node)) return node;
+    for (const value of Object.values(node)) {
+      const found = findDeep(value, predicate, depth + 1);
+      if (found) return found;
+    }
+    return null;
+  };
+
+  // Plain lyrics from the track's "Lyrics" tab, with YT Music's source credit.
+  const lyrics = async ({ requestId }) => {
+    const videoId = moviePlayer()?.getVideoData?.().video_id || null;
+    try {
+      if (!videoId) throw new Error('Nothing is playing');
+      const next = await innertube('next', { videoId });
+      const tab = findDeep(next, (o) =>
+        o.tabRenderer?.endpoint?.browseEndpoint?.browseEndpointContextSupportedConfigs
+          ?.browseEndpointContextMusicConfig?.pageType === 'MUSIC_PAGE_TYPE_TRACK_LYRICS')?.tabRenderer;
+      const browseId = tab?.endpoint?.browseEndpoint?.browseId;
+      let text = null;
+      let source = null;
+      if (browseId) {
+        const shelf = findDeep(await innertube('browse', { browseId }), (o) => o.musicDescriptionShelfRenderer)
+          ?.musicDescriptionShelfRenderer;
+        text = runsText(shelf?.description) || null;
+        source = runsText(shelf?.footer) || null;
+      }
+      post({ type: 'lyrics', requestId, videoId, text, source });
+    } catch (error) {
+      post({ type: 'lyrics', requestId, videoId, text: null, source: null, error: String(error.message || error) });
+    }
+  };
+
+  // Runs a YT Music menu entry (e.g. "Add to queue") through YT Music's own
+  // menu-item component, exactly as a click on its menu would.
+  const runMenuItem = (data) => {
+    const app = $('ytmusic-app');
+    if (!app || !data) return false;
+    const item = document.createElement('ytmusic-menu-service-item-renderer');
+    item.hidden = true;
+    item.data = data;
+    app.appendChild(item);
+    setTimeout(() => {
+      item.click();
+      setTimeout(() => item.remove(), 1000);
+    }, 50);
+    return true;
   };
 
   // In-app navigation through YT Music's own router (no page reload).
@@ -387,6 +565,38 @@
     like: () => clickFirst(...SELECTORS.like),
     dislike: () => clickFirst(...SELECTORS.dislike),
     search,
+    library,
+    queue,
+    lyrics,
+    toggleShuffle: () => clickFirst(...SELECTORS.shuffle),
+    cycleRepeat: () => clickFirst(...SELECTORS.repeat),
+    queueResult: ({ id, position }) => runMenuItem(resultMenus.get(id)?.[position === 'end' ? 'end' : 'next']),
+    playQueueItem: async ({ index, videoId }) => {
+      const items = queueItems();
+      if (items[index]?.data?.videoId !== videoId) return false; // queue changed; don't jump to the wrong track
+      const current = items.findIndex((item) => item.hasAttribute('selected'));
+      const playingId = () => moviePlayer()?.getVideoData?.().video_id;
+      // Queue rows only render on the player page, and YT Music ignores
+      // navigation into the queue it is already playing. Up Next lists only
+      // the current track and what follows, so step forward with Next (the
+      // one path that reliably follows the queue), checking after each step.
+      if (index > current) {
+        const maxSteps = Math.min(index - current + 2, 50);
+        for (let step = 0; step < maxSteps && playingId() !== videoId; step++) {
+          const before = playingId();
+          commands.next();
+          for (let wait = 0; wait < 20 && playingId() === before; wait++) {
+            await new Promise((resolve) => setTimeout(resolve, 150));
+          }
+        }
+      }
+      if (playingId() === videoId && !isPlaying()) togglePlayback();
+      return playingId() === videoId;
+    },
+    playPlaylist: ({ playlistId }) => navigate(
+      { watchPlaylistEndpoint: { playlistId } },
+      `/watch?list=${encodeURIComponent(playlistId)}`,
+    ),
     playItem: ({ videoId, playlistId }) => navigate(
       { watchEndpoint: { videoId, ...(playlistId ? { playlistId } : {}) } },
       `/watch?v=${encodeURIComponent(videoId)}${playlistId ? `&list=${encodeURIComponent(playlistId)}` : ''}`,

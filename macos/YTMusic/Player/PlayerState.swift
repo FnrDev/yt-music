@@ -19,6 +19,12 @@ struct PlayerState: Equatable, Sendable, Decodable {
     var duration: Double = 0
     var likeStatus: LikeStatus = .indifferent
     var volume = 100
+    var shuffle = false
+    var repeatMode: RepeatMode = .none
+
+    enum RepeatMode: String, Sendable, Decodable {
+        case none, all, one
+    }
 
     /// Identifies the track for change detection; falls back to metadata when
     /// the player hasn't exposed a video id yet.
@@ -33,7 +39,14 @@ enum PlayerCommand: Sendable {
     case setVolume(Int)
     case like, dislike
     case focusSearch
-    case search(query: String, requestId: Int)
+    case search(query: String, params: String?, requestId: Int)
+    case library(requestId: Int)
+    case queue(requestId: Int)
+    case lyrics(requestId: Int)
+    case toggleShuffle, cycleRepeat
+    case queueResult(id: String, playNext: Bool)
+    case playQueueItem(index: Int, videoId: String)
+    case playPlaylist(String)
     case playItem(videoId: String, playlistId: String?)
     case openItem(browseId: String, pageType: String?)
     case openSearch(String)
@@ -51,8 +64,19 @@ enum PlayerCommand: Sendable {
         case .like: ("like", "undefined")
         case .dislike: ("dislike", "undefined")
         case .focusSearch: ("focusSearch", "undefined")
-        case .search(let query, let requestId):
-            ("search", Self.json(["query": query, "requestId": requestId]))
+        case .search(let query, let params, let requestId):
+            ("search", Self.json(["query": query, "params": params.map { $0 as Any } ?? NSNull(), "requestId": requestId]))
+        case .library(let requestId): ("library", Self.json(["requestId": requestId]))
+        case .queue(let requestId): ("queue", Self.json(["requestId": requestId]))
+        case .lyrics(let requestId): ("lyrics", Self.json(["requestId": requestId]))
+        case .toggleShuffle: ("toggleShuffle", "undefined")
+        case .cycleRepeat: ("cycleRepeat", "undefined")
+        case .queueResult(let id, let playNext):
+            ("queueResult", Self.json(["id": id, "position": playNext ? "next" : "end"]))
+        case .playQueueItem(let index, let videoId):
+            ("playQueueItem", Self.json(["index": index, "videoId": videoId]))
+        case .playPlaylist(let playlistId):
+            ("playPlaylist", Self.json(["playlistId": playlistId]))
         case .playItem(let videoId, let playlistId):
             ("playItem", Self.json(["videoId": videoId, "playlistId": playlistId.map { $0 as Any } ?? NSNull()]))
         case .openItem(let browseId, let pageType):
@@ -87,12 +111,18 @@ struct SearchResult: Identifiable, Equatable, Sendable, Decodable {
     let playlistId: String?
     let browseId: String?
     let pageType: String?
+    /// YT Music offers "Play next" / "Add to queue" for this result.
+    let canQueue: Bool
 
-    /// Songs, videos and episodes play; everything else opens a page.
-    var isPlayable: Bool { videoId != nil && browseId == nil }
+    /// Songs, videos and episodes play directly.
+    var isTrack: Bool { videoId != nil && browseId == nil }
+    /// Tracks, and albums/playlists that can be played as a whole.
+    var canPlay: Bool { isTrack || (playlistId != nil && kind != .artist) }
+    /// Artists, albums and playlists have a page to open.
+    var canOpen: Bool { browseId != nil }
 
     private enum CodingKeys: String, CodingKey {
-        case id, kind, title, subtitle, thumbnailURL, videoId, playlistId, browseId, pageType
+        case id, kind, title, subtitle, thumbnailURL, videoId, playlistId, browseId, pageType, canQueue
     }
 
     init(from decoder: Decoder) throws {
@@ -106,5 +136,26 @@ struct SearchResult: Identifiable, Equatable, Sendable, Decodable {
         playlistId = try? c.decodeIfPresent(String.self, forKey: .playlistId)
         browseId = try? c.decodeIfPresent(String.self, forKey: .browseId)
         pageType = try? c.decodeIfPresent(String.self, forKey: .pageType)
+        canQueue = (try? c.decodeIfPresent(Bool.self, forKey: .canQueue)) ?? false
     }
+}
+
+/// A YT Music search filter chip (Songs, Artists, Albums…).
+struct SearchFilter: Identifiable, Equatable, Sendable, Decodable {
+    let title: String
+    let params: String
+    let isSelected: Bool
+    var id: String { params }
+}
+
+/// One entry in the play queue ("Up next").
+struct QueueItem: Identifiable, Equatable, Sendable, Decodable {
+    let index: Int
+    let videoId: String
+    let title: String
+    let subtitle: String
+    let duration: String
+    let thumbnailURL: URL?
+    let isCurrent: Bool
+    var id: String { "\(index)-\(videoId)" }
 }

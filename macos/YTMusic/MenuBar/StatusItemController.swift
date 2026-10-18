@@ -7,7 +7,7 @@ import SwiftUI
 @MainActor
 final class StatusItemController: NSObject {
     private let model: PlayerModel
-    private let search: SearchModel
+    private let panels: PopoverPanels
     private let actions: PlayerMenuActions
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let popover = NSPopover()
@@ -16,9 +16,9 @@ final class StatusItemController: NSObject {
 
     private static let maxTitleLength = 32
 
-    init(model: PlayerModel, search: SearchModel, actions: PlayerMenuActions) {
+    init(model: PlayerModel, panels: PopoverPanels, actions: PlayerMenuActions) {
         self.model = model
-        self.search = search
+        self.panels = panels
         self.actions = actions
         super.init()
 
@@ -27,7 +27,7 @@ final class StatusItemController: NSObject {
         popover.animates = true
         hosting = NSHostingController(rootView: MiniPlayerView(
             model: model,
-            search: search,
+            panels: panels,
             onShowWindow: { [weak self] in
                 self?.popover.performClose(nil)
                 actions.showMainWindow(nil)
@@ -71,7 +71,7 @@ final class StatusItemController: NSObject {
     /// grow upward, off the top of the screen).
     private func observeSearchLayout() {
         withObservationTracking {
-            _ = search.isActive
+            _ = panels.search.isActive
         } onChange: { [weak self] in
             Task { @MainActor in
                 self?.resizePopover()
@@ -137,6 +137,7 @@ final class StatusItemController: NSObject {
             // makes the main window key, which closes a transient popover.
             // Clicking into the search field activates the app with the
             // popover's window key, which is all typing needs.
+            panels.library.refreshIfStale()
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             popover.contentViewController?.view.window?.makeKey()
         }

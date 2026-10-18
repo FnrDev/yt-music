@@ -17,7 +17,10 @@ final class WebBridge: NSObject, WKScriptMessageHandler {
     var onWindowDrag: (() -> Void)?
     var onTitleBarDoubleClick: (() -> Void)?
     /// Replies to `search` commands.
-    var onSearchResults: ((_ requestId: Int, _ results: [SearchResult], _ error: String?) -> Void)?
+    var onSearchResults: ((_ requestId: Int, _ results: [SearchResult], _ filters: [SearchFilter], _ error: String?) -> Void)?
+    var onLibrary: ((_ requestId: Int, _ recent: [SearchResult], _ playlists: [SearchResult]) -> Void)?
+    var onQueue: ((_ requestId: Int, _ items: [QueueItem]) -> Void)?
+    var onLyrics: ((_ requestId: Int, _ videoId: String?, _ text: String?, _ source: String?, _ error: String?) -> Void)?
 
     init(model: PlayerModel) {
         self.model = model
@@ -73,7 +76,13 @@ final class WebBridge: NSObject, WKScriptMessageHandler {
                     model.update(state)
                 }
             case "searchResults":
-                onSearchResults?(envelope.requestId ?? -1, envelope.results ?? [], envelope.error)
+                onSearchResults?(envelope.requestId ?? -1, envelope.results ?? [], envelope.filters ?? [], envelope.error)
+            case "library":
+                onLibrary?(envelope.requestId ?? -1, envelope.recent ?? [], envelope.playlists ?? [])
+            case "queue":
+                onQueue?(envelope.requestId ?? -1, envelope.items ?? [])
+            case "lyrics":
+                onLyrics?(envelope.requestId ?? -1, envelope.videoId, envelope.text, envelope.source, envelope.error)
             case "windowDrag":
                 onWindowDrag?()
             case "windowZoom":
@@ -92,6 +101,13 @@ final class WebBridge: NSObject, WKScriptMessageHandler {
         let state: PlayerState?
         let requestId: Int?
         let results: [SearchResult]?
+        let filters: [SearchFilter]?
+        let recent: [SearchResult]?
+        let playlists: [SearchResult]?
+        let items: [QueueItem]?
+        let videoId: String?
+        let text: String?
+        let source: String?
         let error: String?
     }
 }

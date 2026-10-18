@@ -39,7 +39,9 @@ Sent once per page load. Hosts should treat the page as reloaded (reset state).
     "position": 42.3,
     "duration": 213.0,
     "likeStatus": "like | dislike | indifferent",
-    "volume": 80
+    "volume": 80,
+    "shuffle": false,
+    "repeatMode": "none | all | one"
   }
 }
 ```
@@ -73,6 +75,21 @@ Hosts should extrapolate position between messages rather than relying on them.
 
 Reply to a `search` command. The first result is YT Music's top result when it
 has one. Hosts should drop replies whose `requestId` isn't the latest.
+Results also carry `canQueue` (YT Music offers Play next / Add to queue), and
+the reply carries `filters`: YT Music's chips as `{title, params, isSelected}`;
+pass a chip's `params` back in `search` to filter.
+
+### `library`, `queue`, `lyrics`
+
+Replies to the commands of the same name, each with the request's `requestId`:
+
+- `library`: `{recent, playlists}`, both arrays of search-result records
+- `queue`: `{items}`, each `{index, videoId, title, subtitle, duration, thumbnailURL, isCurrent}`
+  (only the queue playback follows; alternate song/video counterparts are left out)
+- `lyrics`: `{videoId, text, source}`; `text` is null when YT Music has none
+
+Signed-in requests (history, library) carry the same session auth headers YT
+Music's own requests use; public ones (search, lyrics) work without.
 
 ### `windowDrag` / `windowZoom`
 
@@ -105,6 +122,14 @@ Evaluate `window.__ytmBridge?.command(name, arg)`:
 | `playItem`    | `{videoId, playlistId?}` | play a result (in-app navigation) |
 | `openItem`    | `{browseId, pageType?}` | open an artist/album/playlist page |
 | `openSearch`  | query (string) | show the full search results page |
+| `search`      | `{query, params?, requestId}` | `params` selects a filter chip |
+| `library`     | `{requestId}`  | replies with `library` |
+| `queue`       | `{requestId}`  | replies with `queue` |
+| `lyrics`      | `{requestId}`  | replies with `lyrics` for the current track |
+| `queueResult` | `{id, position: "next" \| "end"}` | Play next / Add to queue for a result from the latest reply |
+| `playQueueItem` | `{index, videoId}` | skip ahead to a queue item |
+| `playPlaylist` | `{playlistId}` | play an album/playlist from the start |
+| `toggleShuffle` / `cycleRepeat` | — | shuffle on/off; repeat off → all → one |
 
 ## Themes
 

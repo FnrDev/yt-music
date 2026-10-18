@@ -12,6 +12,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: StatusItemController!
     private var volumeKeeper: VolumeKeeper!
     private var search: SearchModel!
+    private var library: LibraryModel!
+    private var queue: QueueModel!
+    private var lyrics: LyricsModel!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppSettings.registerDefaults()
@@ -20,14 +23,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         volumeKeeper = VolumeKeeper(model: model)
         bridge = WebBridge(model: model)
         search = SearchModel(player: model)
-        bridge.onSearchResults = { [weak search] requestId, results, error in
-            search?.receive(requestId: requestId, results: results, error: error)
+        library = LibraryModel(player: model)
+        queue = QueueModel(player: model)
+        lyrics = LyricsModel(player: model)
+        bridge.onSearchResults = { [weak search] requestId, results, filters, error in
+            search?.receive(requestId: requestId, results: results, filters: filters, error: error)
+        }
+        bridge.onLibrary = { [weak library] requestId, recent, playlists in
+            library?.receive(requestId: requestId, recent: recent, playlists: playlists)
+        }
+        bridge.onQueue = { [weak queue] requestId, items in
+            queue?.receive(requestId: requestId, items: items)
+        }
+        bridge.onLyrics = { [weak lyrics] requestId, _, text, source, error in
+            lyrics?.receive(requestId: requestId, text: text, source: source, error: error)
         }
         windowController = MainWindowController(bridge: bridge)
         actions = PlayerMenuActions(model: model, windowController: windowController)
         nowPlaying = NowPlayingController(model: model, artworkLoader: artworkLoader)
         notifier = TrackNotifier(model: model, artworkLoader: artworkLoader)
-        statusItem = StatusItemController(model: model, search: search, actions: actions)
+        statusItem = StatusItemController(
+            model: model,
+            panels: PopoverPanels(search: search, library: library, queue: queue, lyrics: lyrics),
+            actions: actions
+        )
 
         NSApp.mainMenu = MainMenu.build(actions: actions, windowController: windowController)
         windowController.show()

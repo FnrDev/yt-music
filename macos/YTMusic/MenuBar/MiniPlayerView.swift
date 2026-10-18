@@ -1,40 +1,58 @@
 import SwiftUI
 
-/// The popover shown from the menu bar icon: search on top, then a compact
-/// player in the spirit of Control Center's Now Playing module.
+/// The popover shown from the menu bar icon: search on top, a panel (search
+/// results, or Library / Up Next / Lyrics), then a compact player in the
+/// spirit of Control Center's Now Playing module.
 struct MiniPlayerView: View {
     let model: PlayerModel
-    let search: SearchModel
+    let panels: PopoverPanels
     var onShowWindow: () -> Void
     var onShowSettings: () -> Void
 
     static let width: CGFloat = 340
+    /// Constant, so the popover never resizes (NSPopover grows upward and
+    /// would push itself off the top of the screen).
+    static let panelHeight: CGFloat = 300
     private static let padding: CGFloat = 14
 
+    @AppStorage("popoverPanel") private var panel: PopoverPanel = .library
+
     var body: some View {
+        let search = panels.search
+        let actions = ResultActions(search: search, onShowWindow: onShowWindow)
         VStack(spacing: 0) {
             SearchField(search: search) {
-                if let first = search.results.first { activate(first) }
+                if let first = search.results.first { actions.activate(first) }
             }
-            .padding(.bottom, 12)
+            .padding(.bottom, 10)
 
-            if search.isActive {
-                SearchResultsView(
-                    search: search,
-                    onActivate: activate,
-                    onShowAll: {
-                        search.showAllResults()
-                        onShowWindow()
+            Group {
+                if search.isActive {
+                    VStack(spacing: 8) {
+                        FilterBar(search: search)
+                        SearchResultsView(search: search, actions: actions) {
+                            search.showAllResults()
+                            onShowWindow()
+                        }
                     }
-                )
-                Divider()
-                    .overlay(Color.white.opacity(0.08))
-                    .padding(.vertical, 10)
+                } else {
+                    VStack(spacing: 8) {
+                        PanelPicker(selection: $panel)
+                        switch panel {
+                        case .library: LibraryPanel(library: panels.library, actions: actions)
+                        case .upNext: QueuePanel(queue: panels.queue)
+                        case .lyrics: LyricsPanel(lyrics: panels.lyrics)
+                        }
+                    }
+                }
             }
+            .frame(height: Self.panelHeight, alignment: .top)
+
+            Divider()
+                .overlay(Color.white.opacity(0.08))
+                .padding(.vertical, 10)
 
             // Always lay out the full player so the popover keeps one height.
-            // NSPopover grows upward when its content gets taller, which would
-            // push it off the top of the screen.
             NowPlayingSection(model: model)
                 .opacity(model.state.hasTrack ? 1 : 0)
                 .allowsHitTesting(model.state.hasTrack)
@@ -54,10 +72,38 @@ struct MiniPlayerView: View {
         .focusEffectDisabled()
         .animation(.easeOut(duration: 0.25), value: model.state.trackKey)
     }
+}
 
-    private func activate(_ result: SearchResult) {
-        // Pages (artists, albums, playlists) open in the main window.
+enum PopoverPanel: String, CaseIterable, Identifiable {
+    case library, upNext, lyrics
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .library: "Library"
+        case .upNext: "Up Next"
+        case .lyrics: "Lyrics"
+        }
+    }
+}
+
+/// What a result row can do, shared by search results and the library.
+@MainActor
+struct ResultActions {
+    let search: SearchModel
+    let onShowWindow: () -> Void
+
+    func activate(_ result: SearchResult) {
         if search.activate(result) { onShowWindow() }
+    }
+
+    func play(_ result: SearchResult) { search.play(result) }
+
+    func open(_ result: SearchResult) {
+        if search.open(result) { onShowWindow() }
+    }
+
+    func queue(_ result: SearchResult, playNext: Bool) {
+        search.queue(result, playNext: playNext)
     }
 }
 
@@ -254,29 +300,77 @@ private struct TransportControls: View {
     let model: PlayerModel
 
     var body: some View {
-        let isPlaying = model.state.isPlaying
-        HStack(spacing: 30) {
+        let state = model.state
+        HStack(spacing: 22) {
+            ToggleButton(
+                systemName: "shuffle",
+                isOn: state.shuffle,
+                help: state.shuffle ? "Shuffle on" : "Shuffle off"
+            ) { model.send(.toggleShuffle) }
+
             Button { model.send(.previous) } label: {
                 Image(systemName: "backward.fill").font(.system(size: 17))
             }
             .help("Previous")
 
             Button { model.send(.playPause) } label: {
-                Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                Image(systemName: state.isPlaying ? "pause.fill" : "play.fill")
                     .font(.system(size: 24))
                     .contentTransition(.symbolEffect(.replace))
                     .frame(width: 34, height: 34)
             }
-            .help(isPlaying ? "Pause" : "Play")
+            .help(state.isPlaying ? "Pause" : "Play")
 
             Button { model.send(.next) } label: {
                 Image(systemName: "forward.fill").font(.system(size: 17))
             }
             .help("Next")
+
+            ToggleButton(
+                systemName: state.repeatMode == .one ? "repeat.1" : "repeat",
+                isOn: state.repeatMode != .none,
+                help: repeatHelp(state.repeatMode)
+            ) { model.send(.cycleRepeat) }
         }
         .buttonStyle(PlayerButtonStyle())
         .frame(maxWidth: .infinity)
     }
+
+    private func repeatHelp(_ mode: PlayerState.RepeatMode) -> String {
+        switch mode {
+        case .none: "Repeat off"
+        case .all: "Repeat all"
+        case .one: "Repeat one"
+        }
+    }
+}
+
+/// Shuffle / repeat: green with a dot underneath when on, as in Spotify.
+private struct ToggleButton: View {
+    let systemName: String
+    let isOn: Bool
+    let help: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 2) {
+                Image(systemName: systemName)
+                    .font(.system(size: 13, weight: .semibold))
+                Circle()
+                    .frame(width: 4, height: 4)
+                    .opacity(isOn ? 1 : 0)
+            }
+            .foregroundStyle(isOn ? Color.spotifyGreen : Color.white.opacity(0.7))
+            .frame(width: 24, height: 28)
+        }
+        .help(help)
+    }
+}
+
+extension Color {
+    /// Spotify's bright accent, matching the Spotify-style theme.
+    static let spotifyGreen = Color(red: 0x1E / 255, green: 0xD7 / 255, blue: 0x60 / 255)
 }
 
 private struct LikeButtons: View {
@@ -476,55 +570,225 @@ private struct SearchField: View {
     }
 }
 
-/// Results for the current query, in a fixed-height list so the popover only
-/// changes size when search starts or ends.
-private struct SearchResultsView: View {
-    static let height: CGFloat = 320
-
+/// YT Music's own filter chips for the query, plus "All".
+private struct FilterBar: View {
     let search: SearchModel
-    var onActivate: (SearchResult) -> Void
+
+    var body: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 6) {
+                Pill(title: "All", isSelected: search.filter == nil) { search.select(filter: nil) }
+                ForEach(search.filters) { filter in
+                    Pill(title: filter.title, isSelected: search.filter == filter.params) {
+                        search.select(filter: filter)
+                    }
+                }
+            }
+        }
+        .scrollIndicators(.never)
+        .frame(height: 28)
+        .opacity(search.filters.isEmpty ? 0 : 1)
+    }
+}
+
+private struct PanelPicker: View {
+    @Binding var selection: PopoverPanel
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(PopoverPanel.allCases) { panel in
+                Pill(title: panel.title, isSelected: selection == panel) { selection = panel }
+            }
+            Spacer()
+        }
+        .frame(height: 28)
+    }
+}
+
+/// Spotify-style chip: tinted, or white with black text when selected.
+private struct Pill: View {
+    let title: String
+    let isSelected: Bool
+    let action: () -> Void
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(isSelected ? .black : .white)
+                .padding(.horizontal, 12)
+                .frame(height: 28)
+                .background(Capsule().fill(isSelected ? .white : .white.opacity(isHovering ? 0.16 : 0.1)))
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
+    }
+}
+
+private struct SearchResultsView: View {
+    let search: SearchModel
+    let actions: ResultActions
     var onShowAll: () -> Void
 
     var body: some View {
-        Group {
-            if search.results.isEmpty {
-                VStack(spacing: 8) {
-                    if search.isSearching {
-                        ProgressView().controlSize(.small)
-                    } else if let message = search.message {
-                        Text(message)
-                            .font(.system(size: 12))
-                            .foregroundStyle(.white.opacity(0.55))
-                            .multilineTextAlignment(.center)
+        if search.results.isEmpty {
+            PanelMessage(isLoading: search.isSearching, message: search.message)
+        } else {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 2) {
+                    ForEach(Array(search.results.enumerated()), id: \.element.id) { index, result in
+                        if search.filter == nil, index == 0 {
+                            SectionHeader(title: "Top result")
+                        } else if search.filter == nil, index == 1 {
+                            SectionHeader(title: "Results").padding(.top, 8)
+                        }
+                        ResultRow(result: result, actions: actions)
+                    }
+                    Button(action: onShowAll) {
+                        Text("Show all results in YT Music")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 10)
+                }
+            }
+            .scrollIndicators(.never)
+            .opacity(search.isSearching ? 0.6 : 1) // refreshing for a newer query
+        }
+    }
+}
+
+// MARK: - Panels
+
+private struct LibraryPanel: View {
+    let library: LibraryModel
+    let actions: ResultActions
+
+    var body: some View {
+        if library.recent.isEmpty && library.playlists.isEmpty {
+            PanelMessage(
+                isLoading: library.isLoading,
+                message: "Nothing here yet. Play something, or sign in to YouTube Music."
+            )
+        } else {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 2) {
+                    if !library.recent.isEmpty {
+                        SectionHeader(title: "Recently played")
+                        ForEach(library.recent) { ResultRow(result: $0, actions: actions) }
+                    }
+                    if !library.playlists.isEmpty {
+                        SectionHeader(title: "Your playlists").padding(.top, 8)
+                        ForEach(library.playlists) { ResultRow(result: $0, actions: actions) }
                     }
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .scrollIndicators(.never)
+        }
+    }
+}
+
+private struct QueuePanel: View {
+    let queue: QueueModel
+
+    var body: some View {
+        // Show the current track and what follows; earlier tracks are history.
+        let current = queue.items.firstIndex(where: \.isCurrent) ?? 0
+        let upcoming = Array(queue.items.dropFirst(current))
+        Group {
+            if upcoming.isEmpty {
+                PanelMessage(isLoading: !queue.hasLoaded, message: "Your queue is empty.")
             } else {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 2) {
-                        ForEach(Array(search.results.enumerated()), id: \.element.id) { index, result in
-                            if index == 0 {
-                                SectionHeader(title: "Top result")
-                            } else if index == 1 {
-                                SectionHeader(title: "Results").padding(.top, 8)
+                        ForEach(Array(upcoming.enumerated()), id: \.element.id) { offset, item in
+                            if offset == 0 {
+                                SectionHeader(title: item.isCurrent ? "Now playing" : "Next")
+                            } else if offset == 1 {
+                                SectionHeader(title: "Next").padding(.top, 8)
                             }
-                            SearchResultRow(result: result) { onActivate(result) }
+                            QueueRow(item: item) { queue.play(item) }
                         }
-                        Button(action: onShowAll) {
-                            Text("Show all results in YT Music")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(.white.opacity(0.7))
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 10)
                     }
                 }
                 .scrollIndicators(.never)
-                .opacity(search.isSearching ? 0.6 : 1) // refreshing for a newer query
             }
         }
-        .frame(height: Self.height)
+        .onAppear { queue.isVisible = true }
+        .onDisappear { queue.isVisible = false }
+    }
+}
+
+private struct LyricsPanel: View {
+    let lyrics: LyricsModel
+
+    var body: some View {
+        Group {
+            switch lyrics.content {
+            case .loading:
+                PanelMessage(isLoading: true, message: nil)
+            case .unavailable(let message):
+                PanelMessage(isLoading: false, message: message)
+            case .lyrics(let text, let source):
+                // Right-to-left scripts (Arabic, Hebrew…) read from the right.
+                let rtl = Self.isRightToLeft(text)
+                ScrollView {
+                    VStack(alignment: rtl ? .trailing : .leading, spacing: 12) {
+                        Text(text)
+                            .font(.system(size: 15, weight: .semibold))
+                            .lineSpacing(5)
+                            .foregroundStyle(.white.opacity(0.92))
+                            .multilineTextAlignment(rtl ? .trailing : .leading)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: rtl ? .trailing : .leading)
+                        if let source {
+                            Text(source)
+                                .font(.system(size: 11))
+                                .foregroundStyle(.white.opacity(0.5))
+                        }
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                }
+                .scrollIndicators(.never)
+            }
+        }
+        .onAppear { lyrics.isVisible = true }
+        .onDisappear { lyrics.isVisible = false }
+    }
+
+    /// True when most letters are from a right-to-left script.
+    private static func isRightToLeft(_ text: String) -> Bool {
+        var rtl = 0, ltr = 0
+        for scalar in text.unicodeScalars where scalar.properties.isAlphabetic {
+            switch scalar.value {
+            case 0x0590...0x08FF, 0xFB1D...0xFDFF, 0xFE70...0xFEFF: rtl += 1
+            default: ltr += 1
+            }
+        }
+        return rtl > ltr
+    }
+}
+
+private struct PanelMessage: View {
+    let isLoading: Bool
+    let message: String?
+
+    var body: some View {
+        VStack(spacing: 8) {
+            if isLoading {
+                ProgressView().controlSize(.small)
+            } else if let message {
+                Text(message)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.white.opacity(0.55))
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -540,15 +804,17 @@ private struct SectionHeader: View {
     }
 }
 
-private struct SearchResultRow: View {
+// MARK: - Rows
+
+private struct ResultRow: View {
     let result: SearchResult
-    var action: () -> Void
+    let actions: ResultActions
     @State private var isHovering = false
 
     var body: some View {
-        Button(action: action) {
+        Button { actions.activate(result) } label: {
             HStack(spacing: 10) {
-                thumbnail
+                Thumbnail(url: result.thumbnailURL, round: result.kind == .artist)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(result.title)
                         .font(.system(size: 13))
@@ -560,25 +826,107 @@ private struct SearchResultRow: View {
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                Image(systemName: result.isPlayable ? "play.fill" : "chevron.right")
-                    .font(.system(size: result.isPlayable ? 11 : 12, weight: .semibold))
+                if isHovering && (result.canQueue || result.canOpen) {
+                    Menu { menuItems } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.8))
+                            .frame(width: 22, height: 22)
+                    }
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .fixedSize()
+                    .help("More")
+                }
+                Image(systemName: result.canPlay ? "play.fill" : "chevron.right")
+                    .font(.system(size: result.canPlay ? 11 : 12, weight: .semibold))
                     .foregroundStyle(.white.opacity(isHovering ? 0.9 : 0.4))
-                    .help(result.isPlayable ? "Play" : "Open in YT Music")
+                    .frame(width: 14)
             }
             .padding(.horizontal, 8)
             .frame(height: 52)
-            .background(
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(.white.opacity(isHovering ? 0.08 : 0))
-            )
+            .background(RowHighlight(isOn: isHovering))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
+        .contextMenu { menuItems }
     }
 
-    private var thumbnail: some View {
-        AsyncImage(url: result.thumbnailURL) { phase in
+    @ViewBuilder private var menuItems: some View {
+        if result.canPlay {
+            Button("Play") { actions.play(result) }
+        }
+        if result.canQueue {
+            Button("Play Next") { actions.queue(result, playNext: true) }
+            Button("Add to Queue") { actions.queue(result, playNext: false) }
+        }
+        if result.canOpen {
+            Divider()
+            Button(openTitle) { actions.open(result) }
+        }
+    }
+
+    private var openTitle: String {
+        switch result.kind {
+        case .artist: "Go to Artist"
+        case .album: "Go to Album"
+        case .playlist: "Go to Playlist"
+        default: "Open in YT Music"
+        }
+    }
+}
+
+private struct QueueRow: View {
+    let item: QueueItem
+    let action: () -> Void
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Thumbnail(url: item.thumbnailURL, round: false)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.title)
+                        .font(.system(size: 13))
+                        .foregroundStyle(item.isCurrent ? Color.spotifyGreen : .white)
+                    Text(item.subtitle)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.white.opacity(0.6))
+                }
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                Text(item.duration)
+                    .font(.system(size: 11).monospacedDigit())
+                    .foregroundStyle(.white.opacity(0.5))
+            }
+            .padding(.horizontal, 8)
+            .frame(height: 52)
+            .background(RowHighlight(isOn: isHovering))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
+        .help(item.isCurrent ? "Now playing" : "Play")
+    }
+}
+
+private struct RowHighlight: View {
+    let isOn: Bool
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 6, style: .continuous)
+            .fill(.white.opacity(isOn ? 0.08 : 0))
+    }
+}
+
+private struct Thumbnail: View {
+    let url: URL?
+    let round: Bool
+
+    var body: some View {
+        AsyncImage(url: url) { phase in
             if let image = phase.image {
                 image.resizable().aspectRatio(contentMode: .fill)
             } else {
@@ -587,7 +935,7 @@ private struct SearchResultRow: View {
         }
         .frame(width: 40, height: 40)
         // Artists get round photos, everything else rounded squares.
-        .clipShape(result.kind == .artist
+        .clipShape(round
             ? AnyShape(Circle())
             : AnyShape(RoundedRectangle(cornerRadius: 4, style: .continuous)))
     }
