@@ -41,7 +41,7 @@ struct MiniPlayerView: View {
                         switch panel {
                         case .library: LibraryPanel(library: panels.library, actions: actions)
                         case .upNext: QueuePanel(queue: panels.queue)
-                        case .lyrics: LyricsPanel(lyrics: panels.lyrics)
+                        case .lyrics: LyricsPanel(lyrics: panels.lyrics, player: model)
                         }
                     }
                 }
@@ -724,6 +724,7 @@ private struct QueuePanel: View {
 
 private struct LyricsPanel: View {
     let lyrics: LyricsModel
+    let player: PlayerModel
 
     var body: some View {
         Group {
@@ -732,45 +733,118 @@ private struct LyricsPanel: View {
                 PanelMessage(isLoading: true, message: nil)
             case .unavailable(let message):
                 PanelMessage(isLoading: false, message: message)
-            case .lyrics(let text, let source):
-                // Right-to-left scripts (Arabic, Hebrew…) read from the right.
-                let rtl = Self.isRightToLeft(text)
-                ScrollView {
-                    VStack(alignment: rtl ? .trailing : .leading, spacing: 12) {
-                        Text(text)
-                            .font(.system(size: 15, weight: .semibold))
-                            .lineSpacing(5)
-                            .foregroundStyle(.white.opacity(0.92))
-                            .multilineTextAlignment(rtl ? .trailing : .leading)
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: rtl ? .trailing : .leading)
-                        if let source {
-                            Text(source)
-                                .font(.system(size: 11))
-                                .foregroundStyle(.white.opacity(0.5))
-                        }
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                }
-                .scrollIndicators(.never)
+            case .instrumental:
+                PanelMessage(isLoading: false, message: "♪ Instrumental")
+            case .synced(let lines, let source):
+                SyncedLyricsView(lines: lines, source: source, player: player)
+            case .plain(let text, let source):
+                PlainLyricsView(text: text, source: source)
             }
         }
         .onAppear { lyrics.isVisible = true }
         .onDisappear { lyrics.isVisible = false }
     }
+}
 
-    /// True when most letters are from a right-to-left script.
-    private static func isRightToLeft(_ text: String) -> Bool {
-        var rtl = 0, ltr = 0
-        for scalar in text.unicodeScalars where scalar.properties.isAlphabetic {
-            switch scalar.value {
-            case 0x0590...0x08FF, 0xFB1D...0xFDFF, 0xFE70...0xFEFF: rtl += 1
-            default: ltr += 1
+/// Time-synced lyrics: the current line is highlighted and kept centred;
+/// click a line to jump there.
+private struct SyncedLyricsView: View {
+    let lines: [LyricLine]
+    let source: String
+    let player: PlayerModel
+
+    /// Highlight slightly early, so a line lights up as it starts being sung.
+    private static let lead: Double = 0.15
+
+    var body: some View {
+        let rtl = isRightToLeft(lines.map(\.text).joined())
+        let alignment: HorizontalAlignment = rtl ? .trailing : .leading
+        TimelineView(.periodic(from: .now, by: 0.2)) { context in
+            let current = LRCParser.currentIndex(in: lines, at: player.position(at: context.date) + Self.lead)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: alignment, spacing: 10) {
+                        ForEach(lines) { line in
+                            Button { player.send(.seek(line.time)) } label: {
+                                Text(line.text.isEmpty ? "♪" : line.text)
+                                    .font(.system(size: 16, weight: .bold))
+                                    .foregroundStyle(.white.opacity(opacity(of: line.id, current: current)))
+                                    .multilineTextAlignment(rtl ? .trailing : .leading)
+                                    .frame(maxWidth: .infinity, alignment: rtl ? .trailing : .leading)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .id(line.id)
+                            .animation(.easeOut(duration: 0.25), value: current)
+                        }
+                        Text("Lyrics from \(source)")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.white.opacity(0.45))
+                            .padding(.top, 8)
+                    }
+                    .padding(.horizontal, 8)
+                    // Room above and below so the first and last lines can be centred.
+                    .padding(.vertical, MiniPlayerView.panelHeight / 2 - 40)
+                }
+                .scrollIndicators(.never)
+                .onAppear {
+                    if let current { proxy.scrollTo(current, anchor: .center) }
+                }
+                .onChange(of: current) { _, line in
+                    guard let line else { return }
+                    withAnimation(.easeInOut(duration: 0.4)) { proxy.scrollTo(line, anchor: .center) }
+                }
             }
         }
-        return rtl > ltr
     }
+
+    /// Current line bright, sung lines dimmed, upcoming lines fainter.
+    private func opacity(of id: Int, current: Int?) -> Double {
+        guard let current else { return 0.35 }
+        if id == current { return 1 }
+        return id < current ? 0.55 : 0.35
+    }
+}
+
+private struct PlainLyricsView: View {
+    let text: String
+    let source: String?
+
+    var body: some View {
+        // Right-to-left scripts (Arabic, Hebrew…) read from the right.
+        let rtl = isRightToLeft(text)
+        ScrollView {
+            VStack(alignment: rtl ? .trailing : .leading, spacing: 12) {
+                Text(text)
+                    .font(.system(size: 15, weight: .semibold))
+                    .lineSpacing(5)
+                    .foregroundStyle(.white.opacity(0.92))
+                    .multilineTextAlignment(rtl ? .trailing : .leading)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: rtl ? .trailing : .leading)
+                if let source {
+                    Text(source)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.white.opacity(0.5))
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+        }
+        .scrollIndicators(.never)
+    }
+}
+
+/// True when most letters are from a right-to-left script.
+private func isRightToLeft(_ text: String) -> Bool {
+    var rtl = 0, ltr = 0
+    for scalar in text.unicodeScalars where scalar.properties.isAlphabetic {
+        switch scalar.value {
+        case 0x0590...0x08FF, 0xFB1D...0xFDFF, 0xFE70...0xFEFF: rtl += 1
+        default: ltr += 1
+        }
+    }
+    return rtl > ltr
 }
 
 private struct PanelMessage: View {

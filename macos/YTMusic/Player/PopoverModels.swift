@@ -89,12 +89,16 @@ final class QueueModel {
 }
 
 /// Lyrics for the current track, fetched while the lyrics view is on screen.
+/// Synced lyrics come from LRCLIB when it has the song (and the setting is on);
+/// otherwise YouTube Music's own plain lyrics, through the bridge.
 @MainActor
 @Observable
 final class LyricsModel {
     enum Content: Equatable {
         case loading
-        case lyrics(text: String, source: String?)
+        case synced(lines: [LyricLine], source: String)
+        case plain(text: String, source: String?)
+        case instrumental
         case unavailable(String)
     }
 
@@ -105,37 +109,85 @@ final class LyricsModel {
     }
 
     @ObservationIgnored private let player: PlayerModel
+    @ObservationIgnored private let lrclib = LRCLibClient()
     @ObservationIgnored private var requests = RequestTracker()
     @ObservationIgnored private var loadedTrack: String?
+    @ObservationIgnored private var lookup: Task<Void, Never>?
+    /// Recent results by track, so returning to a song doesn't fetch again.
+    @ObservationIgnored private var cache: [String: Content] = [:]
+    @ObservationIgnored private var cacheOrder: [String] = []
+
+    private static let cacheLimit = 50
 
     init(player: PlayerModel) {
         self.player = player
         player.observe { [weak self] old, new in
-            guard let self, isVisible, old.trackKey != new.trackKey else { return }
-            refreshIfNeeded()
+            guard let self, isVisible else { return }
+            // LRCLIB matches on duration, which arrives shortly after the track.
+            if old.trackKey != new.trackKey || (old.duration == 0 && new.duration > 0) {
+                refreshIfNeeded()
+            }
         }
     }
 
     func refreshIfNeeded() {
-        let track = player.state.trackKey
-        guard player.state.hasTrack else {
-            content = .unavailable("Nothing is playing")
+        let state = player.state
+        guard state.hasTrack, !state.isAd else {
+            lookup?.cancel()
             loadedTrack = nil
+            content = state.isAd ? .unavailable("Lyrics will show after the ad") : .unavailable("Nothing is playing")
             return
         }
+        let track = state.trackKey
         guard track != loadedTrack else { return }
-        loadedTrack = track
+
+        if let cached = cache[track] {
+            loadedTrack = track
+            content = cached
+            return
+        }
         content = .loading
+        guard state.duration > 0 else { return } // wait for the duration; see init
+        loadedTrack = track
+        lookup?.cancel()
+
+        guard AppSettings.syncedLyrics else {
+            requestPlainLyrics()
+            return
+        }
+        lookup = Task { [weak self, lrclib] in
+            let match = await lrclib.syncedLyrics(
+                title: state.title, artist: state.artist, album: state.album, duration: state.duration)
+            guard let self, !Task.isCancelled, loadedTrack == track else { return }
+            if let match {
+                finish(match.isInstrumental ? .instrumental : .synced(lines: match.lines, source: "LRCLIB"), for: track)
+            } else {
+                requestPlainLyrics()
+            }
+        }
+    }
+
+    /// Called by the bridge with YouTube Music's plain lyrics.
+    func receive(requestId: Int, text: String?, source: String?, error: String?) {
+        guard requests.isLatest(requestId), let track = loadedTrack else { return }
+        if let text, !text.isEmpty {
+            finish(.plain(text: text, source: source), for: track)
+        } else {
+            // Not cached: a failed request (e.g. while loading) is worth retrying.
+            content = .unavailable(error ?? "Lyrics aren't available for this song")
+        }
+    }
+
+    private func requestPlainLyrics() {
         player.send(.lyrics(requestId: requests.next()))
     }
 
-    func receive(requestId: Int, text: String?, source: String?, error: String?) {
-        guard requests.isLatest(requestId) else { return }
-        if let text, !text.isEmpty {
-            content = .lyrics(text: text, source: source)
-        } else {
-            content = .unavailable(error ?? "Lyrics aren't available for this song")
-        }
+    private func finish(_ result: Content, for track: String) {
+        cache[track] = result
+        cacheOrder.removeAll { $0 == track }
+        cacheOrder.append(track)
+        if cacheOrder.count > Self.cacheLimit { cache[cacheOrder.removeFirst()] = nil }
+        if loadedTrack == track { content = result }
     }
 }
 

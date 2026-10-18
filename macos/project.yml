@@ -48,3 +48,32 @@ targets:
         NSHumanReadableCopyright: "Unofficial client. Not affiliated with Google or YouTube."
         NSSupportsAutomaticTermination: false
         NSSupportsSuddenTermination: false
+
+  # Pure-logic unit tests. Compiles only the code under test (no app host), so
+  # running tests doesn't launch the app or load YouTube Music.
+  YTMusicTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests
+      - path: YTMusic/Player/LRCParser.swift
+      - path: YTMusic/Player/LRCLibClient.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ahmed.ytmusic.tests
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_IDENTITY: "-"
+
+schemes:
+  YTMusic:
+    build:
+      targets:
+        YTMusic: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - YTMusicTests
+    archive:
+      config: Release

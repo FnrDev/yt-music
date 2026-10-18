@@ -6,6 +6,7 @@ struct SettingsView: View {
     @AppStorage(AppSettings.Key.notifyOnTrackChange) private var notifyOnTrackChange = true
     @AppStorage(AppSettings.Key.keepPlayingWhenClosed) private var keepPlayingWhenClosed = true
     @AppStorage(AppSettings.Key.theme) private var theme = ThemeController.Theme.spotifyStyle.rawValue
+    @AppStorage(AppSettings.Key.syncedLyrics) private var syncedLyrics = true
 
     var body: some View {
         Form {
@@ -20,6 +21,15 @@ struct SettingsView: View {
                 Toggle("Show player controls in the menu bar", isOn: $showMenuBarIcon)
                 Toggle("Show current track title next to the icon", isOn: $showTitleInMenuBar)
                     .disabled(!showMenuBarIcon)
+            }
+            Section {
+                Toggle("Synced lyrics from LRCLIB", isOn: $syncedLyrics)
+            } header: {
+                Text("Lyrics")
+            } footer: {
+                Text("Looks up time-synced lyrics on lrclib.net, which receives the song's title, artist, album and length. When it has none, YouTube Music's own lyrics are shown.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             Section("Playback") {
                 Toggle("Keep playing when the window is closed", isOn: $keepPlayingWhenClosed)

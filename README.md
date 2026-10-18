@@ -80,8 +80,11 @@ rather than the `.xcodeproj`.
     Album / Playlist
   - Library tab: recently played and your playlists
   - Up Next tab: the current queue; click a track to skip ahead to it
-  - Lyrics tab: the current song's lyrics from YT Music, with its source credit
-    (right-to-left scripts are right-aligned)
+  - Lyrics tab: time-synced lyrics that follow the song (current line
+    highlighted and centred; click a line to jump there) when
+    [LRCLIB](https://lrclib.net) has them, otherwise YT Music's own lyrics.
+    Right-to-left scripts are right-aligned. Synced lookups send the song's
+    title, artist, album and length to lrclib.net; turn them off in Settings
   - Shuffle and repeat toggles (also in the Playback menu)
   - Right-click: quick controls menu
   - Optional: current track title next to the icon (Settings)

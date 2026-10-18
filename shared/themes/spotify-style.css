@@ -817,6 +817,44 @@ ytmusic-player-bar #volume-slider[dragging] {
 
 ytmusic-miniplayer {
   padding: 0 var(--sp-gap) !important;
+  /* Spotify's proportions. YT Music's own grid can squeeze the middle
+     column until the progress bar runs under the like buttons. The bar and
+     its time labels are sized to fill exactly the 40% middle column. */
+  grid-template-columns: minmax(0, 30%) minmax(0, 40%) minmax(0, 30%) !important;
+  /* YT Music's own column gaps would push the percentages past 100%, and the
+     grid would then squeeze all three columns equally. */
+  column-gap: 0 !important;
+  --sp-volume-width: 93px;
+}
+
+/* Side sections stay inside their columns; the right one hugs the edge. */
+ytmusic-miniplayer .ytMusicMiniPlayerLeftSection,
+ytmusic-miniplayer .ytMusicMiniPlayerRightSection {
+  min-width: 0 !important;
+  overflow: hidden;
+}
+
+ytmusic-miniplayer .ytMusicMiniPlayerRightSection {
+  justify-content: flex-end !important;
+  gap: var(--sp-gap);
+}
+
+/* Narrower windows: drop the like count (the thumbs stay) and shorten the
+   volume slider, so the right section always fits its 30% column. */
+@media (max-width: 1100px) {
+  ytmusic-miniplayer {
+    --sp-volume-width: 72px;
+  }
+
+  ytmusic-miniplayer like-button-view-model .ytSpecButtonShapeNextButtonTextContent {
+    display: none !important;
+  }
+}
+
+@media (max-width: 900px) {
+  ytmusic-miniplayer {
+    --sp-volume-width: 56px;
+  }
 }
 
 /* Left: 56pt artwork, title over a smaller subdued artist line. */
@@ -899,7 +937,10 @@ ytmusic-miniplayer .ytMusicMiniPlayerProgressBarWrapper {
   background: transparent !important;
   left: 50% !important;
   right: auto !important;
-  width: min(calc(40% - 96px), 722px) !important; /* room for the time labels */
+  /* The middle column is 40% of the bar *inside* its side padding; this box is
+     positioned against the whole bar, so take 40% of that padding back too,
+     plus room for the two 40pt time labels and their 8pt gaps. */
+  width: min(calc(40% - 0.8 * var(--sp-gap) - 96px), 722px) !important;
   height: 12px !important;
   transform: translateX(-50%);
   display: flex;
@@ -988,7 +1029,7 @@ ytmusic-miniplayer .ytMusicMiniPlayerVolumePopup {
   position: relative !important;
   inset: auto !important; /* drop YT Music's floating-popup offsets */
   margin: 0 !important;
-  width: 93px;
+  width: var(--sp-volume-width);
   height: var(--sp-control-small);
   padding: 0 !important;
   background: transparent !important;
@@ -1006,7 +1047,7 @@ ytmusic-miniplayer .ytMusicMiniPlayerVolumePopup slider-shape {
   top: 50%;
   left: 50%;
   width: 12px !important;
-  height: 93px !important;
+  height: var(--sp-volume-width) !important;
   margin: 0 !important;
   transform: translate(-50%, -50%) rotate(90deg);
   align-items: center;
@@ -1031,7 +1072,7 @@ ytmusic-miniplayer .ytMusicMiniPlayerVolumePopup input {
   -webkit-appearance: none !important;
   appearance: none !important;
   width: 12px !important;
-  height: 93px !important;
+  height: var(--sp-volume-width) !important;
   margin: 0 !important;
   background:
     radial-gradient(circle 2px at 50% calc(100% - 2px), var(--sp-bar-fill) 98%, transparent) no-repeat,
