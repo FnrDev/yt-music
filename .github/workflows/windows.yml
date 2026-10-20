@@ -3,6 +3,9 @@ name: Windows build
 on:
   push:
     branches: [main]
+    # Pushing a version tag (v0.1.0, …) also publishes a GitHub release.
+    # Path filters don't apply to tag pushes.
+    tags: ["v*"]
     paths:
       - "windows/**"
       - "shared/**"
@@ -27,6 +30,18 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
+      # The tag's version on release builds, the project's otherwise.
+      - name: Version
+        id: version
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF_TYPE -eq 'tag') {
+            $version = $env:GITHUB_REF_NAME.TrimStart('v')
+          } else {
+            $version = ([xml](Get-Content windows/YTMusic/YTMusic.csproj)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+
       # Self-contained single file: runs on Windows 10/11 without installing
       # .NET. WebView2 (Evergreen) ships with Windows.
       - name: Publish
@@ -37,10 +52,51 @@ jobs:
           -p:IncludeNativeLibrariesForSelfExtract=true
           -p:EnableCompressionInSingleFile=true
           -p:DebugType=none
+          -p:Version=${{ steps.version.outputs.version }}
           -o publish
+
+      - name: Installer
+        shell: pwsh
+        run: |
+          $iscc = Get-Command iscc -ErrorAction SilentlyContinue
+          if (-not $iscc) {
+            choco install innosetup -y --no-progress | Out-Null
+            $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          }
+          & $iscc /Q "/DAppVersion=${{ steps.version.outputs.version }}" /DSourceDir=..\..\publish /DOutputDir=..\..\dist windows\installer\YTMusic.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - uses: actions/upload-artifact@v4
         with:
           name: YTMusic-win-x64
           path: publish/YTMusic.exe
           if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: YTMusic-Setup-win-x64
+          path: dist/YTMusic-Setup-*.exe
+          if-no-files-found: error
+
+  release:
+    if: github.ref_type == 'tag'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          mv artifacts/YTMusic.exe "artifacts/YTMusic-${TAG#v}-x64-portable.exe"
+          gh release create "$TAG" artifacts/*.exe \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "YT Music $TAG" \
+            --generate-notes

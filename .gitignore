@@ -4,3 +4,5 @@ macos/build/
 macos/YTMusic.xcodeproj/
 windows/**/bin/
 windows/**/obj/
+publish/
+dist/

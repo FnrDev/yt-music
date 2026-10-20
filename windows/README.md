@@ -1,7 +1,18 @@
 # YT Music for Windows
 
-Early version of the Windows app. It mirrors the macOS app's architecture and
-reuses its page-side code unchanged.
+The Windows app works great on Windows 10 and 11. It mirrors the macOS app's
+architecture and reuses its page-side code unchanged.
+
+## Install
+
+Download `YTMusic-Setup-<version>-x64.exe` from the latest
+[release](https://github.com/FnrDev/yt-music/releases/latest) and run it. It
+installs per-user into `%LOCALAPPDATA%\Programs\YT Music` (no admin prompt),
+adds Start menu and desktop shortcuts, and shows up in Settings → Apps for
+uninstalling. Uninstalling keeps your settings and sign-in.
+
+Prefer no installer? `YTMusic-<version>-x64-portable.exe` from the same release
+runs as-is. Both need the WebView2 runtime, which ships with Windows 10/11.
 
 ## Stack
 
@@ -41,7 +52,7 @@ reuses its page-side code unchanged.
   already supports them; see [`shared/PROTOCOL.md`](../shared/PROTOCOL.md))
 - Unified title bar like macOS (window buttons drawn by the page; the bridge
   already reports top-bar drags as `windowDrag`)
-- Installer / auto-update
+- Auto-update (check GitHub releases on launch)
 
 ## Build
 
@@ -57,8 +68,26 @@ A self-contained single-file build (what CI produces):
 dotnet publish windows/YTMusic/YTMusic.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o publish
 ```
 
+The installer wraps that `publish\YTMusic.exe` with
+[Inno Setup 6](https://jrsoftware.org/isinfo.php)
+([`installer/YTMusic.iss`](installer/YTMusic.iss)) and lands in `dist\`:
+
+```bash
+iscc /DAppVersion=0.1.0 /DSourceDir=..\..\publish /DOutputDir=..\..\dist windows/installer/YTMusic.iss
+```
+
 The project also compiles on macOS and Linux (`EnableWindowsTargeting`), which
 is handy for checking changes, but the app only runs on Windows.
+
+## Releasing
+
+Every push to `main` builds the portable exe and the installer on GitHub
+Actions (as run artifacts). Pushing a version tag publishes a GitHub release
+with both attached; the tag sets the app and installer version:
+
+```bash
+git tag v0.1.0 && git push origin v0.1.0
+```
 
 ## macOS → Windows mapping
 
